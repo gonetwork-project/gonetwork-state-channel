@@ -1,0 +1,159 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EthereumJS VM - Browser Example</title>
+
+
+</head>
+
+<body>
+  <!--div class="hidden" data-quiet-profile-name="audible"></div>
+    <div class="wrapper">
+      <header>
+        <h1>Send Text</h1>
+      </header>
+      <section>
+      <div class="hidden" data-quiet-warning></div>
+      <div class="form-group">
+        <textarea autofocus="true" autocapitalize="none" autocomplete="off" spellcheck="off" class="form-control" style="resize:none" rows="5" data-quiet-text-input></textarea>
+      </div>
+      <button type="button" class="btn btn-default" style="width:100%" data-quiet-send-button data-quiet-sending-text="Sending...">Send</button>
+      </section>
+    </div>
+
+    <div class="hidden" data-quiet-profile-name="audible"></div>
+    <div class="wrapper">
+      <header>
+        <h1>Receive Text</h1>
+      </header>
+      <section>
+      <div class="hidden" data-quiet-warning></div>
+      <pre data-quiet-receive-text-target>Your received text will show up here. Waiting...</pre>
+      </section>
+    </div-->
+  <!--script type="text/javascript" src="/build/quiet.js"></script-->
+  <!--script async type="text/javascript" src="/build/quiet-emscripten.js"></script-->
+  <script src="/build/index.bundle.js"></script>
+  <script type="text/javascript" src="/src/connectionManager.js"></script>
+  <script type="text/javascript">
+
+    //window.cm = new ConnectionManager("ws://10.0.9.161:8088");
+
+  </script>
+
+
+  <!--script type="text/javascript">
+    var TextTransmitter = (function() {
+      Quiet.init({
+          profilesPrefix: "/",
+          memoryInitializerPrefix: "/",
+          libfecPrefix: "/"
+      });
+      var btn;
+      var textbox;
+      var warningbox;
+      var transmit;
+
+      function onTransmitFinish() {
+          textbox.focus();
+          btn.addEventListener('click', onClick, false);
+          btn.disabled = false;
+          var originalText = btn.innerText;
+          btn.innerText = btn.getAttribute('data-quiet-sending-text');
+          btn.setAttribute('data-quiet-sending-text', originalText);
+      };
+
+      function onClick(e) {
+          e.target.removeEventListener(e.type, arguments.callee);
+          e.target.disabled = true;
+          var originalText = e.target.innerText;
+          e.target.innerText = e.target.getAttribute('data-quiet-sending-text');
+          e.target.setAttribute('data-quiet-sending-text', originalText);
+          var payload = textbox.value;
+          if (payload === "") {
+              onTransmitFinish();
+              return;
+          }
+          transmit.transmit(Quiet.str2ab(payload));
+      };
+
+      function onQuietReady() {
+          var profilename = document.querySelector('[data-quiet-profile-name]').getAttribute('data-quiet-profile-name');
+          transmit = Quiet.transmitter({profile: profilename, onFinish: onTransmitFinish});
+          btn.addEventListener('click', onClick, false);
+      };
+
+      function onQuietFail(reason) {
+          console.log("quiet failed to initialize: " + reason);
+          warningbox.classList.remove("hidden");
+          warningbox.textContent = "Sorry, it looks like there was a problem with this example (" + reason + ")";
+      };
+
+      function onDOMLoad() {
+          btn = document.querySelector('[data-quiet-send-button]');
+          textbox = document.querySelector('[data-quiet-text-input]');
+          warningbox = document.querySelector('[data-quiet-warning]');
+          Quiet.addReadyCallback(onQuietReady, onQuietFail);
+      };
+
+      document.addEventListener("DOMContentLoaded", onDOMLoad);
+  })();
+  </script-->
+
+  <!--script type="text/javascript">
+    var TextReceiver = (function() {
+        Quiet.init({
+            profilesPrefix: "/",
+            memoryInitializerPrefix: "/",
+            libfecPrefix: "/"
+        });
+        var target;
+        var content = new ArrayBuffer(0);
+        var warningbox;
+
+        function onReceive(recvPayload) {
+            content = Quiet.mergeab(content, recvPayload);
+            target.textContent = Quiet.ab2str(content);
+            warningbox.classList.add("hidden");
+        };
+
+        function onReceiverCreateFail(reason) {
+            console.log("failed to create quiet receiver: " + reason);
+            warningbox.classList.remove("hidden");
+            warningbox.textContent = "Sorry, it looks like this example is not supported by your browser. Please give permission to use the microphone or try again in Google Chrome or Microsoft Edge."
+        };
+
+        function onReceiveFail(num_fails) {
+            warningbox.classList.remove("hidden");
+            warningbox.textContent = "We didn't quite get that. It looks like you tried to transmit something. You may need to move the transmitter closer to the receiver and set the volume to 50%."
+        };
+
+        function onQuietReady() {
+            var profilename = document.querySelector('[data-quiet-profile-name]').getAttribute('data-quiet-profile-name');
+            Quiet.receiver({profile: profilename,
+                 onReceive: onReceive,
+                 onCreateFail: onReceiverCreateFail,
+                 onReceiveFail: onReceiveFail
+            });
+        };
+
+        function onQuietFail(reason) {
+            console.log("quiet failed to initialize: " + reason);
+            warningbox.classList.remove("hidden");
+            warningbox.textContent = "Sorry, it looks like there was a problem with this example (" + reason + ")";
+        };
+
+        function onDOMLoad() {
+            target = document.querySelector('[data-quiet-receive-text-target]');
+            warningbox = document.querySelector('[data-quiet-warning]');
+            Quiet.addReadyCallback(onQuietReady, onQuietFail);
+        };
+
+        document.addEventListener("DOMContentLoaded", onDOMLoad);
+    })();
+  </script-->
+
+</body>
+</html>

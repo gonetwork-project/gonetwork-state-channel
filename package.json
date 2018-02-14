@@ -1,0 +1,36 @@
+{
+  "name": "state-channel",
+  "version": "1.0.0",
+  "description": "browser based state channel for super fast off chain tx",
+  "main": "index.js",
+  "scripts": {
+    "browserify": "browserify src/index.js -o build/index.bundle.js",
+    "babel": "babel --presets es2015 src/index.js -o build/index.bundle.js",
+    "start": "http-server",
+    "postinstall": "git clone https://github.com/ethereumjs/browser-builds.git node_modules/ethereumjs;"
+  },
+  "keywords": [
+    "ethereum",
+    "offchain-tx"
+  ],
+  "author": "Amit Shah",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "ethereumjs": "https://github.com/ethereumjs/browser-builds",
+    "babel-cli": "^6.26.0",
+    "babel-core": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1",
+    "browserify": "^15.2.0",
+    "http-server": "^0.11.1"
+  },
+  "dependencies": {
+    "detectrtc": "^1.3.5",
+    "sjcl": "^1.0.7",
+    "sjcl-all": "^1.0.1",
+    "web3": "^1.0.0-beta.29",
+    "webrtc-adapter": "^6.1.1",
+    "workerpool": "^2.3.0",
+    "wrtc": "0.0.65",
+    "ethereumjs-abi": "*"
+  }
+}
