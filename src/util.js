@@ -157,11 +157,21 @@ Transfer.prototype.sign = function(privateKey) {
 }
 
 //https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
-function LockTransfer(lockHash){
-  var hs = generateRandomHash();
-  this.hashSecret = hs.hash;
-  this.secret = hs.secret;
+function LockTransfer(options){
+  this._super.call(this,options);
+  if(!options.lock){
+    options.lock = generateRandomHash();
+  }
+
+  this.lock = options.lock;
+  Object.defineProperty(this.lock, "secret", {enumerable:false});
 }
+
+LockTransfer.prototype = Object.create(Transfer.prototype);
+
+LockTransfer.prototype.constructor = LockTransfer;
+
+LockTransfer.prototype._super = Transfer;
 
 LockTransfer.prototype.getSignableHash = function(){
   var buffer =  abi.soliditySHA3(
@@ -170,7 +180,7 @@ LockTransfer.prototype.getSignableHash = function(){
       this.transfer_amount,
       this.nonce,
       util.toBuffer(util.addHexPrefix(this.random_hash)),
-      util.toBuffer(util.addHexPrefix(this.hashSecret))]);
+      util.toBuffer(util.addHexPrefix(this.lock.hash))]);
   return buffer;
 };
 
@@ -179,8 +189,8 @@ sjcl.random.startCollectors();
 //GLOBAL functions
 function generateRandomHash(){
   var randomBuffer = sjcl.random.randomWords(256/(4*8));
-  var secret = sjcl.codec.hex.fromBits(randomBuffer);
-  var hash= util.sha3('0x'+secret);
+  var secret = util.addHexPrefix(sjcl.codec.hex.fromBits(randomBuffer));
+  var hash= util.sha3(secret);
   return {'secret': secret, 'hash':hash};
 }
 
@@ -202,5 +212,11 @@ var channelAddress = address.toString("hex");
 var t = new Transfer({"from":address, transfer_amount:new util.BN(10), nonce: new util.BN(1),channelId:channelAddress });
 
 t.sign(privateKey);
-alert(t.verify("0xbe862ad9abfe6f22bcb087716c7d89a26051f74c"));
 
+console.log(t.verify("0xbe862ad9abfe6f22bcb087716c7d89a26051f74c"));
+debugger;
+var lt = new LockTransfer({"from":address, transfer_amount:new util.BN(10), nonce: new util.BN(1),channelId:channelAddress });
+lt.sign(privateKey);
+console.log(lt.verify("0xbe862ad9abfe6f22bcb087716c7d89a26051f74c"));
+console.log(util.sha3(lt.lock.secret).toString("hex") + ":" + lt.lock.hash.toString("hex"));
+//var l = new LockTransfer({"from":address, transfer_amount:new util.BN(10), nonce: new util.BN(1),channelId:channelAddress })
