@@ -88,4 +88,36 @@ test('test messages', function(t){
   })
 
 
+   t.test("test LockedTransfer",function(assert){
+    var secret = util.toBuffer('0x849949170a38fe5100c8e59e64787df9a90507d82e25793a6419b5f69e627c94');
+    var lockedTransfer = new message.LockedTransfer({
+      nonce:new util.BN(1),
+      transferredAmount: new util.BN(1200),
+      locksRoot: util.toBuffer('0x23358f9edad2cbbec9dad2737adcdaa60c3044ddfeb020bae0648d64fc1ae836'),
+      channelAddress: address,
+      lock: {
+        amount:new util.BN(50),
+        expiration: new util.BN(1200),
+        hashLock:util.sha3(secret)
+      }
+    })
+    assert.throws(function (){ lockedTransfer.from },"no signature to recover address from", "Should throw no signature error");
+    lockedTransfer.sign(privateKey);
+
+    assert.equals(lockedTransfer.from.compare(address),0);
+    var serialized = JSON.stringify(lockedTransfer);
+
+    var recoverdLockTransfer = new message.LockedTransfer(JSON.parse(serialized,message.JSON_REVIVER_FUNC));
+
+    console.log(JSON.stringify(recoverdLockTransfer));
+
+    assert.equals(recoverdLockTransfer.lock.amount.eq(new util.BN(50)),true);
+    recoverdLockTransfer.lock.amount = recoverdLockTransfer.lock.amount.add(new util.BN(10));
+    console.log("INCREASED LOCKED AMOUNT:"+recoverdLockTransfer.lock.amount);
+    assert.equals(recoverdLockTransfer.lock.amount.eq(new util.BN(60)),true);
+    assert.equals(recoverdLockTransfer.lock.expiration.eq(new util.BN(1200)),true);
+    assert.equals(recoverdLockTransfer.lock.hashLock.compare(util.sha3(secret)),0);
+
+    assert.end()
+  })
 });

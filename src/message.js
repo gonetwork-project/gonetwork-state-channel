@@ -14,7 +14,13 @@ class Hashable{
     throw new Error("unimplemented getMessageHash");
   }
 }
-
+function TO_BN(value){
+  if(util.BN.isBN(value)){
+    return value;
+  }else{
+    return new util.BN(value,16);
+  }
+}
 //we need to handle buffer serialization and deserialization
 function JSON_REVIVER_FUNC(k,v) {
       if (
@@ -28,6 +34,8 @@ function JSON_REVIVER_FUNC(k,v) {
       }
       return v;
 }
+
+
 
 //Messages that merely require signing extend this Base Class
 class SignedMessage{
@@ -74,8 +82,8 @@ class SignedMessage{
 class ProofMessage extends SignedMessage{
   constructor(options){
     super(options);
-    this.nonce = options.nonce || new util.BN(0);
-    this.transferredAmount = options.transferredAmount || new util.BN(0);
+    this.nonce = TO_BN(options.nonce) || new util.BN(0);
+    this.transferredAmount = TO_BN(options.transferredAmount) || new util.BN(0);
     this.locksRoot = options.locksRoot || EMPTY_32BYTE_BUFFER;
     this.channelAddress = options.channelAddress || EMPTY_20BYTE_BUFFER;
     this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
@@ -108,14 +116,16 @@ class ProofMessage extends SignedMessage{
 //A lock is included as part of a LockedTransfer message
 class Lock extends Hashable{
   constructor(options){
-    this.amount = options.amount || new util.BN(0);
-    this.expiration= options.expiration || new util.BN(0);
+    super(options);
+    this.amount = TO_BN(options.amount) || new util.BN(0);
+    this.expiration= TO_BN(options.expiration) || new util.BN(0);
     this.hashLock = options.hashLock || EMPTY_32BYTE_BUFFER;
   }
 
   getMessageHash(){
-    return abi.soliditySHA3(['uint256','uint256','bytes32'],
-      this.amount, this.expiration, this.hashLock);
+    var hash =  abi.soliditySHA3(['uint256','uint256','bytes32'],[
+      this.amount, this.expiration, this.hashLock]);
+    return hash;
   }
 
 }
@@ -123,13 +133,14 @@ class Lock extends Hashable{
 
 class DirectTransfer extends ProofMessage{
   constructor(options){
-    this.to = options.to || EMPTY_20BYTE_BUFFER;
     super(options);
+    this.to = options.to || EMPTY_20BYTE_BUFFER;
+
   }
 
   getMessageHash(){
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "uint256", "address","bytes32","bytes32","address"],
+     [ "uint256", "uint256", "address","bytes32","address"],
      [this.nonce,
       this.transferredAmount,
       this.channelAddress,
@@ -147,17 +158,19 @@ class LockedTransfer extends DirectTransfer{
       options.lock = new Lock();
     }else if(options.lock instanceof Lock){
       this.lock = options.lock;
-    }else if( options.lock instanceof object){
+    }else if( options.lock instanceof Object){
       this.lock = new Lock(options.lock);
     }
   }
 
   getMessageHash(){
+      console.log("HASH LockedTransfer");
+
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "uint256", "address","bytes32","bytes32","address","bytes32" ],
+     [ "uint256", "uint256", "address","bytes32","address","bytes32" ],
      [this.nonce,
       this.transferredAmount,
-      util.addHexPrefix(this.channelAddress),
+      this.channelAddress,
       this.locksRoot,
       this.to,
       this.lock.getMessageHash()]);
