@@ -6,15 +6,17 @@ const abi = require("ethereumjs-abi");
 
 //empty 32 byte buffer
 EMPTY_32BYTE_BUFFER= Buffer.alloc(32);
+EMPTY_20BYTE_BUFFER = Buffer.alloc(20);
 
 //TODO: handle out of bounds values for Proof Messages
 class Hashable{
-
+  getMessageHash(){
+    throw new Error("unimplemented getMessageHash");
+  }
 }
 
 //we need to handle buffer serialization and deserialization
 function JSON_REVIVER_FUNC(k,v) {
-console.log("IN REVIVER");
       if (
       v !== null            &&
       typeof v === 'object' &&
@@ -50,11 +52,18 @@ class SignedMessage{
     this.signature = util.ecsign(buffer,privateKey);
   }
 
-  recoverAddress(){
+  _recoverAddress(){
      var buffer = this.getHash();
      var pk = util.ecrecover(buffer,this.signature.v,util.toBuffer(this.signature.r),util.toBuffer(this.signature.s));
      var address = util.pubToAddress(pk);
      return address;
+  }
+
+  get from() {
+    if(!this.signature){
+      throw new Error("no signature to recover address from");
+    }
+    return this._recoverAddress();
   }
 
 }
@@ -68,7 +77,7 @@ class ProofMessage extends SignedMessage{
     this.nonce = options.nonce || new util.BN(0);
     this.transferredAmount = options.transferredAmount || new util.BN(0);
     this.locksRoot = options.locksRoot || EMPTY_32BYTE_BUFFER;
-    this.channelAddress = options.channelAddress || null;
+    this.channelAddress = options.channelAddress || EMPTY_20BYTE_BUFFER;
     this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
     this.signature = options.signature || null;
 
@@ -79,9 +88,9 @@ class ProofMessage extends SignedMessage{
      [ "uint256", "uint256", "address","bytes32","bytes32" ],
      [this.nonce,
       this.transferredAmount,
-      util.addHexPrefix(this.channelAddress),
+      this.channelAddress,
       this.locksRoot,
-      util.toBuffer(this.getMessageHash())]);
+      this.getMessageHash()]);
     return solidityHash;
   }
 
@@ -90,19 +99,21 @@ class ProofMessage extends SignedMessage{
   }
 
   toProof(){
-    return new ProofMessage(this.nonce, this.transferredAmount, this.locksRoot,this.channelAddress,this.messageHash);
+    return new ProofMessage(this.nonce, this.transferredAmount,
+      this.locksRoot,this.channelAddress,this.messageHash,this.signature);
   }
 
 }
 
+//A lock is included as part of a LockedTransfer message
 class Lock extends Hashable{
-  constructor(){
-    this.amount = new util.BN(0);
-    this.expiration=new util.BN(0);
-    this.hashLock = EMPTY_32BYTE_BUFFER;
+  constructor(options){
+    this.amount = options.amount || new util.BN(0);
+    this.expiration= options.expiration || new util.BN(0);
+    this.hashLock = options.hashLock || EMPTY_32BYTE_BUFFER;
   }
 
-  getHash(){
+  getMessageHash(){
     return abi.soliditySHA3(['uint256','uint256','bytes32'],
       this.amount, this.expiration, this.hashLock);
   }
@@ -111,66 +122,135 @@ class Lock extends Hashable{
 
 
 class DirectTransfer extends ProofMessage{
+  constructor(options){
+    this.to = options.to || EMPTY_20BYTE_BUFFER;
+    super(options);
+  }
 
-
+  getMessageHash(){
+     var solidityHash = abi.soliditySHA3(
+     [ "uint256", "uint256", "address","bytes32","bytes32","address"],
+     [this.nonce,
+      this.transferredAmount,
+      this.channelAddress,
+      this.locksRoot,
+      this.to]);
+    return solidityHash;
+  }
 }
 
 class LockedTransfer extends DirectTransfer{
 
-  constructor(){
-    super();
-    this.to = ""; //EthAddress
-
+  constructor(options){
+    super(options);
+    if(!options.lock){
+      options.lock = new Lock();
+    }else if(options.lock instanceof Lock){
+      this.lock = options.lock;
+    }else if( options.lock instanceof object){
+      this.lock = new Lock(options.lock);
+    }
   }
 
   getMessageHash(){
-    throw new Error("unimplemented getSignableHash");
+     var solidityHash = abi.soliditySHA3(
+     [ "uint256", "uint256", "address","bytes32","bytes32","address","bytes32" ],
+     [this.nonce,
+      this.transferredAmount,
+      util.addHexPrefix(this.channelAddress),
+      this.locksRoot,
+      this.to,
+      this.lock.getMessageHash()]);
+    return solidityHash;
   }
 
 }
 
 class MediatedTransfer extends LockedTransfer{
-  constructor(){
-    super();
-    this.target = ""; //EthAddress
+  constructor(options){
+    super(options);
+    this.target = options.target || EMPTY_20BYTE_BUFFER; //EthAddress
+  }
+
+  getMessageHash(){
+     var solidityHash = abi.soliditySHA3(
+     [ "uint256", "uint256", "address","bytes32","bytes32","address","address","bytes32" ],
+     [this.nonce,
+      this.transferredAmount,
+      util.addHexPrefix(this.channelAddress),
+      this.locksRoot,
+      this.to,
+      this.target,
+      this.lock.getMessageHash()]);
+    return solidityHash;
   }
 }
 
 class RequestSecret extends SignedMessage{
-  constructor(){
-    super();
-    this.hashLock = EMPTY_32BYTE_BUFFER; //Serializable Lock Object
-    this.amount = util.BN(0);
+  constructor(options){
+    super(options);
+    this.to = options.to || EMPTY_20BYTE_BUFFER;
+    this.hashLock = options.hashLock || EMPTY_32BYTE_BUFFER; //Serializable Lock Object
+    this.amount = options.amount || util.BN(0);
   }
 
   getHash(){
+    //we cannot include the expiration as this value is modified by hops at times
     abi.soliditySHA3(
-     [ "bytes32","uint256"],
-     [this.hashLock, this.amount]
+     [ "address", "bytes32","uint256"],
+     [this.to, this.hashLock, this.amount]
      );
   }
 }
 
 class RevealSecret extends SignedMessage{
-  constructor(){
-    super();
+  constructor(options){
+    super(options);
+    this.secret = options.secret || EMPTY_32BYTE_BUFFER;
+    this.to = options.to || EMPTY_20BYTE_BUFFER;
+  }
+
+   getMessageHash(){
+     var solidityHash = abi.soliditySHA3(
+     [ "uint256", "address"],
+     [this.secret,
+      this.to]);
+    return solidityHash;
   }
 }
 
-class Secret extends ProofMessage{
-  constructor(){
-    super();
+//Once a secret is known, if we want to keep the payment channel alive longer
+//then the min(openLocks.expired) block, then convert the lock into a balance proof
+//using this message.  Without it, we will have to close channel and withdraw on chain
+class SecretToProof extends ProofMessage{
+  constructor(options){
+    super(options);
+    this.to = options.to || EMPTY_20BYTE_BUFFER;
+    this.secret = options.secret || EMPTY_32BYTE_BUFFER;
   }
+
+  getMessageHash(){
+     var solidityHash = abi.soliditySHA3(
+     [ "uint256", "uint256", "address","bytes32","bytes32","address","bytes32" ],
+     [this.nonce,
+      this.transferredAmount,
+      util.addHexPrefix(this.channelAddress),
+      this.locksRoot, // locksRoot - sha3(secret)
+      this.to,
+      this.secret]);
+    return solidityHash;
+  }
+
 }
 
-//unsigned ACK
+//unsigned ACK?
 class Ack{
-  constructor(){
-    this.messageHash;
+  constructor(options){
+    this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
   }
 }
 
 module.exports= {
   SignedMessage,ProofMessage,DirectTransfer,LockedTransfer,MediatedTransfer,
-  RequestSecret,RevealSecret,Secret,Ack,Lock, JSON_REVIVER_FUNC
+  RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC
 }

@@ -52,7 +52,7 @@ test('test messages', function(t){
   });
 
   t.test("recover address from signature in javascript", function(assert){
-    assert.equals(proofMessage.recoverAddress().compare(address), 0);
+    assert.equals(proofMessage.from.compare(address), 0);
     assert.end();
   });
 
@@ -68,7 +68,22 @@ test('test messages', function(t){
     assert.equals(recoveredProofMessage.signature.v,27);
     assert.equals(util.addHexPrefix(recoveredProofMessage.signature.r.toString('hex')),"0x849949170a38fe5100c8e59e64787df9a90507d82e25793a6419b5f69e627c94");
     assert.equals(util.addHexPrefix(recoveredProofMessage.signature.s.toString('hex')),"0x23358f9edad2cbbec9dad2737adcdaa60c3044ddfeb020bae0648d64fc1ae836");
-    assert.equals(recoveredProofMessage.recoverAddress().compare(address), 0);
+    assert.equals(recoveredProofMessage.from.compare(address), 0);
+    assert.end()
+  })
+
+  t.test("unsigned message should throw error when recovering from",function(assert){
+    var serialized = JSON.stringify(proofMessage);
+    var recoveredProofMessage = new message.ProofMessage(JSON.parse(serialized,message.JSON_REVIVER_FUNC));
+
+    console.log(JSON.stringify(recoveredProofMessage));
+
+    recoveredProofMessage.getMessageHash = function(){
+      return message.EMPTY_32BYTE_BUFFER;
+    }
+    recoveredProofMessage.signature = null;
+    assert.throws(function(){ recoveredProofMessage.from }, "no signature to recover address from", "Should throw no signature error");
+
     assert.end()
   })
 
