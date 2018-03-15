@@ -2,7 +2,7 @@ const util = require('ethereumjs-util');
 util.Buffer = require('buffer').Buffer;
 // Expects elements to be Buffers of length 32
 // Empty string elements will be removed prior to the buffer check
-// by default, order is not preserved
+// by default, order is not preserved and we use Buffer.Compare order
 function MerkleTree(elements,ordered) {
   this.ordered = ordered;
   // remove empty strings
@@ -132,20 +132,45 @@ MerkleTree.prototype._getProofPair = function(index,level){
     return null;
 }
 
-MerkleTree.prototype.addElement = function(hashedElement){
-  throw new Error("addElement not yet implemented");
+
+MerkleTree.prototype.push = function(hashedElement){
+  if(!(hashedElement.length ===32 && util.Buffer.isBuffer(hashedElement))){
+      throw new Error("a proof can only be generated for a hashed element, please try hashing your element before sending");
+    }
+  this.elements.push(hashedElement);
+  if(!this.ordered){
+    this.levels[0] = this.elements.sort(Buffer.compare);
+  }else{
+    this.levels[0]=this.elements;
+  }
+  this.generateHashTree();
 }
 
-MerkleTree.prototype.removeElement = function(hashedElement){
-  throw new Error("removeElement not yet implemented");
+MerkleTree.prototype.remove = function(hashedElement){
+  var index = this.findElement(hashedElement);
+  this.elements = this.elements.splice(index,1);
+  if(!this.ordered){
+    this.levels[0]=this.elements.sort(Buffer.compare);
+  }else{
+    this.levels[0]=this.elements;
+  }
+  this.generateHashTree();
 }
 
-MerkleTree.prototype.removeElementAtIndex = function(index){
-  throw new Error("removeElementAtIndex not yet implemented");
+//linear search...
+MerkleTree.prototype.findElement = function(hashedElement){
+  var k = 0;
+  do{
+    var buffer = this.elements[k];
+    if(buffer.equals(hashedElement)){
+      return k;
+    }
+    k++;
+  }while(k< this.elements.length);
 }
 
-MerkleTree.prototype.verify = function(proof,root,hashedElement){
-  throw new Error("verify not yet implemented");
+MerkleTree.prototype.verify = function(proof,hashedElement){
+  return checkProof(proof,this.getRoot(), hashedElement, this.ordered);
 }
 
 //=========================== GLOBAL Proof Functions ==========================//
@@ -245,7 +270,7 @@ function checkMerkleProof(proof,root,element){
  var buffer = proof.reduce(function(acc, currentValue){
     return util.sha3(concatBuffer(acc,currentValue));
   },element);
-  return root.compare(buffer)===0;
+  return root.equals(buffer);
 }
 
 function printTree(merkletree)
@@ -281,6 +306,10 @@ debugger;
 var verified= checkMerkleProof(proof,merkletree.getRoot(),elements[9], 5+1 );
 debugger;
 
+proof = merkletree.generateProof(merkletree.levels[0][9]);
+verified = checkMerkleProof(proof,merkletree.getRoot(),merkletree.levels[0][9], 9+1);
+debugger;
+
 merkletree = new MerkleTree(elements,true);
 
 merkletree.generateHashTree();
@@ -296,6 +325,7 @@ debugger;
 var verified= checkMerkleProof(proof,merkletree.getRoot(),elements[9], 9+1 );
 debugger;
 
+module.exports = MerkleTree;
 
 //Expected Results for Ordered
 // [ <Buffer 21 2a fc 93 5a 56 85 e1 2f 22 19 57 13 fa c5 ba 98 98 9c 7d da 8b 07 64 f5 e8 25 6f c1 54 4a 07>,
