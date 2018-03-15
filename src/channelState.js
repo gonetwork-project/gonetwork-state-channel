@@ -1,4 +1,4 @@
-const MerkleTree = require('./MerkleTree');
+const merkletree = require('./MerkleTree');
 const tx = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl-all');
@@ -15,17 +15,18 @@ class LockWithSecret extends message.Lock{
 }
 //Channel Endpoint state may not be updated directly, you must apply the appropriate message types
 //on the endstate.  The Ch
-class ChannelEnd{
+class ChannelStateSync{
   constructor(options){
     this.proof = new ProofMessage(options.proof);
     //dictionary of locks ordered by hashLock key
     this.pendingLocks = {};
     this.openLocks = {};
-    this.merkleTree = new MerkleTree();
+    this.merkleTree = new merkletree.MerkleTree();
+    //the amount the user has put into the channel
+    this.depositBalance = options.depositBalance || new util.BN(0);
   }
-  containsLock(lock){
 
-  }
+
   applyLockedTransfer(lockedTransfer){
     if(!lockedTransfer instanceof message.LockedTransfer){
       throw new Error("Invalid Message Type: DirectTransfer expected");
@@ -112,20 +113,12 @@ class ChannelEnd{
     }else if(this.openLocks.hasOwnProperty(pendingLock.hashLock.toString('hex'))){
       delete this.openLocks[pendingLock.hashLock.toString('hex')];
     }
-
     this.proof = proof;
     this.merkleTree = mt;
-
-    //TODO: calculate merkleTree without the hashlock
-    //compare to proof.hashLockRoot;
-
-    //TODO:
-    //person may have removed the lock in pending state and straight up made a transfer in the amount
-    //so check pening and openLocks as long as the proof.transferredAmount >= this.proof.transferredAmount + lock.amount;
   }
 
    _computeMerkleTreeWithHashlock(lock){
-      var mt = new MerkleTree(map(Object.values(Object.assign({},this.pendingLocks, this.openLocks)).concat(lock)
+      var mt = new merkletree.MerkleTree(map(Object.values(Object.assign({},this.pendingLocks, this.openLocks)).concat(lock)
         ,function (l) {
         return l.getMessageHash();
       }));
@@ -138,7 +131,7 @@ class ChannelEnd{
       var locks = Object.assign({}, this.pendingLocks, this.openLocks);
       delete locks[hashLockKey];
 
-       var mt = new MerkleTree(map(Object.values(locks)
+       var mt = new merkletree.MerkleTree(map(Object.values(locks)
         ,function (l) {
         return l.getMessageHash();
       }));
@@ -148,9 +141,17 @@ class ChannelEnd{
     }
 
     get lockedAmount(){
-      return reduce(Object.values(this.pendingLocks),function(sum,lock){
-        return sum.add(lock.amount);}, new util.BN(0));
+      return _lockAmount(Object.values(this.pendingLocks));
+    }
 
+    get unlockedAmount(){
+       return _lockAmount(Object.values(this.openLocks));
+    }
+
+    _lockAmount(locksArray){
+       return reduce(locksArray,function(sum,lock){
+        return sum.add(lock.amount);
+      }, new util.BN(0));
     }
 
     balance(peerState){
@@ -158,113 +159,123 @@ class ChannelEnd{
     }
 
     transferrable(peerState){
+      throw new Error("not implemented");
       this.balance(peerState).sub(this.lockedAmount);
     }
 
-    _generateLockProof(lock){
-     return mt.generateProof(lock.getMessageHash());
+    generateLockProof(lock){
+     var lockProof = this.merkleTree.generateProof(lock.getMessageHash());
+     verified = merkletree.checkMerkleProof(lockProof,this.merkleTree.getRoot(),lock.hashLock);
+     if(!verified){
+      throw new Error("Error creating lock proof");
+     }
+     return lockProof;
     }
 
 }
 
-
-
-function ChannelState(options){
-  this.proof = options.proofMessage || new message.ProofMessage();
-  this.contractBalance = options.contractBalance || new util.BN(0);
-  this.openLocks = options.openLocks || [];
-  this.pendingLocks = options.pendingLocks || [];
-  this.merkleTree = options.merkleTree || null;
-
-}
-
-ChannelState.prototype.lockedAmount = function() {
-  return reduce(this.pendingLocks.concat(this.openLocks), function(lockedAmount,r){
-    return r.amount + lockedAmount;
-  })
+module.exports= {
+  ChannelStateSync
 };
 
-ChannelState.prototype.balance = function(self, peerState){
-  return this.contractBalance - this.transferredAmount + peerState.transferredAmount;
-}
 
-ChannelState.prototype.merkleRootWithLock = function(lock){
-  var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks).push(lock), function(lock){
-    return lock.pack();
-  }));
-  mt.generateHashTree();
-  return mt.getRoot();
-}
+// function ChannelState(options){
+//   this.proof = options.proofMessage || new message.ProofMessage();
+//   this.contractBalance = options.contractBalance || new util.BN(0);
+//   this.openLocks = options.openLocks || [];
+//   this.pendingLocks = options.pendingLocks || [];
+//   this.merkleTree = options.merkleTree || null;
 
-ChannelState.prototype.merkleRootWithoutLock = function(hashLock){
-  throw new Error("Not yet implemented: merkletreeWithoutLock");
-}
+// }
 
-//Handle State Transitions by updating our state
-ChannelState.prototype.registerLockTransfer = function(lockTransfer){
-  var root = this.merkleRootWithLock(lock.pack());
-  assert(hashLockRoot == root);
-  this.pendingLocks.push(lock);
+// ChannelState.prototype.lockedAmount = function() {
+//   return reduce(this.pendingLocks.concat(this.openLocks), function(lockedAmount,r){
+//     return r.amount + lockedAmount;
+//   })
+// };
 
-  var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks), function(lock){
-    return lock.pack();
-  }));
-  mt.generateHashTree();
-  this.merkleTree = mt;
+// ChannelState.prototype.balance = function(self, peerState){
+//   return this.contractBalance - this.transferredAmount + peerState.transferredAmount;
+// }
 
-  this.hashLockRoot = root;
-}
+// ChannelState.prototype.merkleRootWithLock = function(lock){
+//   var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks).push(lock), function(lock){
+//     return lock.pack();
+//   }));
+//   mt.generateHashTree();
+//   return mt.getRoot();
+// }
 
-//updated transferred amount directly
-ChannelState.prototype.registerDirectTransfer = function(directTransfer){
-  assert(this.transferredAmount < transferredAmount);
-  this.transferredAmount = transferredAmount;
-  this.nonce = this.nonce + 1;
-}
+// ChannelState.prototype.merkleRootWithoutLock = function(hashLock){
+//   throw new Error("Not yet implemented: merkletreeWithoutLock");
+// }
 
-//unlocks a pending lock if it known
-ChannelState.prototype.registerSecret = function(secret){
-  var hashLock = util.sha3(secret);
-  var index = -1;
-  for(var i =0; i < this.pendingLocks.length; i++){
-    var lock = this.pendingLocks[i];
-    if(lock.hashLock === hashLock){
-      index = i;
-      break;
-    }
-  }
+// //Handle State Transitions by updating our state
+// ChannelState.prototype.registerLockTransfer = function(lockTransfer){
+//   var root = this.merkleRootWithLock(lock.pack());
+//   assert(hashLockRoot == root);
+//   this.pendingLocks.push(lock);
 
-  if(!index){
-    throw new Error("uknown lock secret transmitted");
-  }
-  //updates array in place returns array of popped elements
-  var pendingLock = this.pendingLocks.splice(i,1)[0];
-  pendingLocks.secret = secret;
-  this.openLocks.push(pendingLocks);
-}
+//   var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks), function(lock){
+//     return lock.pack();
+//   }));
+//   mt.generateHashTree();
+//   this.merkleTree = mt;
 
+//   this.hashLockRoot = root;
+// }
 
-ChannelState.prototype.generateLockProof = function(hashLock){
-  var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks), function(lock){
-    return lock.pack();
-  }));
-  mt.generateHashTree();
-  assert(mt.getRoot().eq(this.hashLockRoot));
-  //returns an array buffer to construct the proof
-  return mt.generateProof(hashLock);
-}
+// //updated transferred amount directly
+// ChannelState.prototype.registerDirectTransfer = function(directTransfer){
+//   assert(this.transferredAmount < transferredAmount);
+//   this.transferredAmount = transferredAmount;
+//   this.nonce = this.nonce + 1;
+// }
 
+// //unlocks a pending lock if it known
+// ChannelState.prototype.registerSecret = function(secret){
+//   var hashLock = util.sha3(secret);
+//   var index = -1;
+//   for(var i =0; i < this.pendingLocks.length; i++){
+//     var lock = this.pendingLocks[i];
+//     if(lock.hashLock === hashLock){
+//       index = i;
+//       break;
+//     }
+//   }
 
-/**
- * determines a valid amount of payment that is transferrable between two endpoints of a channel.
- * @param {ChannelState} peerState
- */
-ChannelState.prototype.transferrable = function(self, peerState){
-  return this.balance(peerState) - this.lockedAmount();
-}
+//   if(!index){
+//     throw new Error("uknown lock secret transmitted");
+//   }
+//   //updates array in place returns array of popped elements
+//   var pendingLock = this.pendingLocks.splice(i,1)[0];
+//   pendingLocks.secret = secret;
+//   this.openLocks.push(pendingLocks);
+// }
 
 
+// ChannelState.prototype.generateLockProof = function(hashLock){
+//   var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks), function(lock){
+//     return lock.pack();
+//   }));
+//   mt.generateHashTree();
+//   assert(mt.getRoot().eq(this.hashLockRoot));
+//   //returns an array buffer to construct the proof
+//   return mt.generateProof(hashLock);
+// }
 
-module.exports = {ChannelState};
+
+// /**
+//  * determines a valid amount of payment that is transferrable between two endpoints of a channel.
+//  * @param {ChannelState} peerState
+//  */
+// ChannelState.prototype.transferrable = function(self, peerState){
+//   return this.balance(peerState) - this.lockedAmount();
+// }
+
+
+
+// module.exports = {ChannelState};
+
 
 
