@@ -134,14 +134,16 @@ class Lock extends Hashable{
 class DirectTransfer extends ProofMessage{
   constructor(options){
     super(options);
+    this.msgID = TO_BN(options.msgID) || new util.BN(0);
     this.to = options.to || EMPTY_20BYTE_BUFFER;
 
   }
 
   getMessageHash(){
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "uint256", "address","bytes32","address"],
-     [this.nonce,
+     ["uint256",  "uint256", "uint256", "address","bytes32","address"],
+     [this.msgID,
+      this.nonce,
       this.transferredAmount,
       this.channelAddress,
       this.locksRoot,
@@ -167,8 +169,9 @@ class LockedTransfer extends DirectTransfer{
       console.log("HASH LockedTransfer");
 
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "uint256", "address","bytes32","address","bytes32" ],
-     [this.nonce,
+     ["uint256",  "uint256", "uint256", "address","bytes32","address","bytes32" ],
+     [this.msgID,
+      this.nonce,
       this.transferredAmount,
       this.channelAddress,
       this.locksRoot,
@@ -187,8 +190,9 @@ class MediatedTransfer extends LockedTransfer{
 
   getMessageHash(){
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "uint256", "address","bytes32","bytes32","address","address","bytes32" ],
-     [this.nonce,
+     ["uint256",  "uint256", "uint256", "address","bytes32","bytes32","address","address","bytes32" ],
+     [this.msgID,
+      this.nonce,
       this.transferredAmount,
       util.addHexPrefix(this.channelAddress),
       this.locksRoot,
@@ -202,16 +206,17 @@ class MediatedTransfer extends LockedTransfer{
 class RequestSecret extends SignedMessage{
   constructor(options){
     super(options);
+    this.msgID = TO_BN(options.msgID) || new util.BN(0);
     this.to = options.to || EMPTY_20BYTE_BUFFER;
     this.hashLock = options.hashLock || EMPTY_32BYTE_BUFFER; //Serializable Lock Object
-    this.amount = options.amount || util.BN(0);
+    this.amount = TO_BN(options.amount) || util.BN(0);
   }
 
   getHash(){
     //we cannot include the expiration as this value is modified by hops at times
     abi.soliditySHA3(
-     [ "address", "bytes32","uint256"],
-     [this.to, this.hashLock, this.amount]
+     [ "uint256", "address", "bytes32","uint256"],
+     [this.msgID,this.to, this.hashLock, this.amount]
      );
   }
 }
@@ -238,14 +243,16 @@ class RevealSecret extends SignedMessage{
 class SecretToProof extends ProofMessage{
   constructor(options){
     super(options);
+    this.msgID = TO_BN(options.msgID) || new util.BN(0);
     this.to = options.to || EMPTY_20BYTE_BUFFER;
     this.secret = options.secret || EMPTY_32BYTE_BUFFER;
   }
 
   getMessageHash(){
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "uint256", "address","bytes32","bytes32","address","bytes32" ],
-     [this.nonce,
+     [ "uint256", "uint256", "uint256", "address","bytes32","bytes32","address","bytes32" ],
+     [this.msgID,
+      this.nonce,
       this.transferredAmount,
       util.addHexPrefix(this.channelAddress),
       this.locksRoot, // locksRoot - sha3(secret)
@@ -259,6 +266,7 @@ class SecretToProof extends ProofMessage{
 //unsigned ACK?
 class Ack{
   constructor(options){
+
     this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
   }
 }
