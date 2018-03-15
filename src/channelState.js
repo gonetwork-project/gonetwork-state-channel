@@ -127,7 +127,7 @@ class ChannelEnd{
    _computeMerkleTreeWithHashlock(lock){
       var mt = new MerkleTree(map(Object.values(Object.assign({},this.pendingLocks, this.openLocks)).concat(lock)
         ,function (l) {
-        l.getMessageHash();
+        return l.getMessageHash();
       }));
 
       mt.generateHashTree();
@@ -140,12 +140,31 @@ class ChannelEnd{
 
        var mt = new MerkleTree(map(Object.values(locks)
         ,function (l) {
-        l.getMessageHash();
+        return l.getMessageHash();
       }));
 
       mt.generateHashTree();
       return mt;
     }
+
+    get lockedAmount(){
+      return reduce(Object.values(this.pendingLocks),function(sum,lock){
+        return sum.add(lock.amount);}, new util.BN(0));
+
+    }
+
+    balance(peerState){
+      throw new Error("not implemented");
+    }
+
+    transferrable(peerState){
+      this.balance(peerState).sub(this.lockedAmount);
+    }
+
+    _generateLockProof(lock){
+     return mt.generateProof(lock.getMessageHash());
+    }
+
 }
 
 
