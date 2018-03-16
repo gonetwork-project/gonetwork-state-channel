@@ -108,7 +108,7 @@ class ProofMessage extends SignedMessage{
 
   toProof(){
     return new ProofMessage(this.nonce, this.transferredAmount,
-      this.locksRoot,this.channelAddress,this.messageHash,this.signature);
+      this.locksRoot,this.channelAddress,this.getMessageHash(),this.signature);
   }
 
 }
@@ -266,7 +266,7 @@ class SecretToProof extends ProofMessage{
 //unsigned ACK?
 class Ack{
   constructor(options){
-
+    this.to = options.to || EMPTY_20BYTE_BUFFER;
     this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
   }
 }
