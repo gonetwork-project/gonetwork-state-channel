@@ -250,11 +250,11 @@ class SecretToProof extends ProofMessage{
 
   getMessageHash(){
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "uint256", "uint256", "address","bytes32","bytes32","address","bytes32" ],
+     [ "uint256", "uint256", "uint256", "address","bytes32","address","bytes32" ],
      [this.msgID,
       this.nonce,
       this.transferredAmount,
-      util.addHexPrefix(this.channelAddress),
+      this.channelAddress,
       this.locksRoot, // locksRoot - sha3(secret)
       this.to,
       this.secret]);
