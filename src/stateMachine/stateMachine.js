@@ -46,7 +46,7 @@ const Initiator = new machina.BehavioralFsm( {
             _onEnter: function(state) {
               console.log("ENTERED awaitRevealSecret")
             },
-            receiveSecretReveal:function(state,secretReveal){
+            receiveRevealSecret:function(state,secretReveal){
               console.log("PROCESSING revealSecret")
               if(secretReveal.from.compare(state.to)===0){
                 console.log("SENDING SECRETTOPROOF");
@@ -82,41 +82,42 @@ const Target = new machina.BehavioralFsm( {
 
         init:{
           //mediated transfer state is a mediated transfer along with the secret
-          _onEnter:function (mediatedTransferState) {
-            this.mediatedTransferState = mediatedTransferState;
+          _onEnter:function (state) {
+            console.log("Send RequestSecret message");
           },
           "*":"awaitRevealSecret",
-          _onExit:function () {
-            this.emit("SendSecretRequest",JSON.stringify(this.mediatedTransferState));
+          _onExit:function (state) {
+
           }
 
         },
         awaitRevealSecret: {
-            _onEnter: function() {
-                client.timer = setTimeout( function() {
-                    this.handle(  client, "timeout" );
-                }.bind( this ), 30000 );
-                this.emit( "vehicles", { client: client, status: GREEN } );
+            _onEnter: function(state) {
+              console.log("ENTERED awaitRevealSecret")
             },
-            timeout: "awaitRevealSecret",
-            receiveRevealSecret: function( revealSecret ) {
-                //at this point we have already registered the secret for ourselves
-                //we should move towards appying the secret to the payment channel
-
-                if(this.revealSecret.from.eq(this.mediatedTransferState.to)){
-                  this.emit("SendRevealSecret", this.mediatedTransferState);
-                  this.handle("awaitSecretToProof");
-                }
-
+            receiveRevealSecret:function(state,revealSecret){
+              console.log("PROCESSING revealSecret")
+              if(revealSecret.from.compare(state.from)===0){
+                console.log("SENDING Reveal Secret Echo");
+                this.transition(state,"awaitSecretToProof");
+              }
             },
+            _onExit: function(state  ) {
+
+            }
+
         },
         awaitSecretToProof:{
-          receiveSecretToProof:function(secretToProof){
-            if(secretToProof.from.eq(this.mediatedTransferState.from)){
-              this.emit("MediatedTransferSuccess");
+          receiveSecretToProof:function(state,secretToProof){
+            if(secretToProof.from.compare(state.from)===0){
+              console.log("Recevied SecretToProof");
+              this.transition(state,"completedTransfer");
             };
 
           }
+        },
+        completedTransfer:{
+
         }
 
     },

@@ -21,8 +21,7 @@ test('test messages', function(t){
     mediatedTransfer.sign(privateKey);
 
     debugger
-    var receiveMediatedTransfer = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer),message.JSON_REVIVER_FUNC));
-    assert.equal(receiveMediatedTransfer.from.compare(mediatedTransfer.from),0);
+
     var mediatedTransferState = Object.assign({},mediatedTransfer,{secret:secret});
     stateMachine.Initiator.handle(mediatedTransferState,'init');
 
@@ -42,9 +41,30 @@ test('test messages', function(t){
     requestSecret.sign(privateKey);
     stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
     assert.equal(revealSecret.from.compare(address),0);
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveSecretReveal',revealSecret);
+    stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',revealSecret);
     console.log(mediatedTransferState);
     //stateMachine.Target.handle(receiveMediatedTransfer,'init');
+
+
+    var receiveMediatedTransfer = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer),message.JSON_REVIVER_FUNC));
+    assert.equal(receiveMediatedTransfer.from.compare(mediatedTransfer.from),0);
+    stateMachine.Target.handle(receiveMediatedTransfer,'init');
+    stateMachine.Target.handle(receiveMediatedTransfer,'receiveRevealSecret',revealSecret);
+    assert.equal(receiveMediatedTransfer. __machina__['mediated-transfer'].state, 'awaitSecretToProof');
+    stateMachine.Target.handle(receiveMediatedTransfer,'receiveRevealSecret',revealSecret);
+
+    var proof = Object.assign({},mediatedTransfer.toProof(),{secret:secret,to:address});
+    var secretToProof =  new message.SecretToProof(proof);
+    secretToProof.sign(privateKey);
+
+    console.log("SECRET TO PROOF FROM:"+secretToProof.from.toString('hex'));
+    var receiveSecretToProof = new message.SecretToProof(JSON.parse(JSON.stringify(secretToProof),message.JSON_REVIVER_FUNC));
+    console.log("SECRET TO PROOF FROM:"+receiveSecretToProof.from.toString('hex'));
+    assert.equal(receiveMediatedTransfer. __machina__['mediated-transfer'].state, 'awaitSecretToProof');
+    stateMachine.Target.handle(receiveMediatedTransfer,'receiveSecretToProof',receiveSecretToProof);
+    assert.equal(receiveMediatedTransfer. __machina__['mediated-transfer'].state, 'completedTransfer');
+
+
     assert.end();
     // body...
   })
