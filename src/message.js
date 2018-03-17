@@ -46,7 +46,7 @@ class SignedMessage{
   }
   //pack this object for signing
   getHash(){
-    throw Error("unimplemented pack()");
+    throw Error("unimplemented getHash()");
   }
 
   sign(privateKey){
@@ -157,7 +157,7 @@ class LockedTransfer extends DirectTransfer{
   constructor(options){
     super(options);
     if(!options.lock){
-      options.lock = new Lock();
+      options.lock = new Lock({});
     }else if(options.lock instanceof Lock){
       this.lock = options.lock;
     }else if( options.lock instanceof Object){
@@ -190,11 +190,11 @@ class MediatedTransfer extends LockedTransfer{
 
   getMessageHash(){
      var solidityHash = abi.soliditySHA3(
-     ["uint256",  "uint256", "uint256", "address","bytes32","bytes32","address","address","bytes32" ],
+     ["uint256",  "uint256", "uint256", "address","bytes32","address","address","bytes32" ],
      [this.msgID,
       this.nonce,
       this.transferredAmount,
-      util.addHexPrefix(this.channelAddress),
+      this.channelAddress,
       this.locksRoot,
       this.to,
       this.target,
@@ -214,7 +214,7 @@ class RequestSecret extends SignedMessage{
 
   getHash(){
     //we cannot include the expiration as this value is modified by hops at times
-    abi.soliditySHA3(
+    return abi.soliditySHA3(
      [ "uint256", "address", "bytes32","uint256"],
      [this.msgID,this.to, this.hashLock, this.amount]
      );
@@ -228,7 +228,7 @@ class RevealSecret extends SignedMessage{
     this.to = options.to || EMPTY_20BYTE_BUFFER;
   }
 
-   getMessageHash(){
+   getHash(){
      var solidityHash = abi.soliditySHA3(
      [ "uint256", "address"],
      [this.secret,
@@ -263,7 +263,8 @@ class SecretToProof extends ProofMessage{
 
 }
 
-//unsigned ACK?
+//Note: We initially avoid signing acks because it basically
+//gives an attacker a valid message signature by the signer (which is not intended)
 class Ack{
   constructor(options){
     this.to = options.to || EMPTY_20BYTE_BUFFER;
