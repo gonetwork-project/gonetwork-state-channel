@@ -2,6 +2,19 @@ const machina = require('machina');
 const message = require('../message');
 
 
+//State change can only occur after a mutating action has taken place upstream
+//the transitions merely emit further actions.
+
+//
+function validSecret(state,requestSecret){
+
+}
+
+function validRevealSecret(state,revealSecret){
+
+}
+
+
 const Initiator = new machina.BehavioralFsm( {
 
     initialize: function() {
