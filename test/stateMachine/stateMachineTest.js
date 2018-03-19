@@ -68,4 +68,21 @@ test('test messages', function(t){
     assert.end();
     // body...
   })
+
+  t.test('different messages do not interfere with states',function (assert) {
+    assert.end();
+  })
+
+  t.test('correct event ordering Initiator');
+
+  t.test('correct event ordering Target');
+
+  t.test('invalid secret request');
+
+  t.test('invalid secret reveal from Initiator')
+
+  t.test('invalid  secret reveal from Target');
+
+  t.test('invalid secretToProof');
+
 });
