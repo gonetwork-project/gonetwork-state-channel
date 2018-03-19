@@ -1,4 +1,4 @@
-const merkletree = require('./MerkleTree');
+const merkletree = require('merkletree');
 const tx = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl-all');
@@ -26,6 +26,9 @@ class ChannelStateSync{
     this.depositBalance = options.depositBalance || new util.BN(0);
   }
 
+  get nonce(){
+    return this.proof.nonce;
+  }
 
   applyLockedTransfer(lockedTransfer){
     if(!lockedTransfer instanceof message.LockedTransfer){
@@ -97,7 +100,7 @@ class ChannelStateSync{
       throw new Error("Invalid Lock: uknown lock secret received");
     }
 
-    var mt = _computeMerkleTreeWithoutHashlock(pendingLock.hashLock.toString('hex'));
+    var mt = _computeMerkleTreeWithoutHashlock(pendingLock);
     if(!mt.getRoot().compare(proof.hashLockRoot) ==0){
       throw new Error("Invalid hashLockRoot in SecretToProof");
     }
@@ -127,8 +130,12 @@ class ChannelStateSync{
       return mt;
     }
 
-    _computeMerkleTreeWithoutHashlock(hashLockKey){
+    _computeMerkleTreeWithoutHashlock(lock){
+      var hashLockKey = lock.hashLock.toString('hex');
       var locks = Object.assign({}, this.pendingLocks, this.openLocks);
+      if(!locks.hasOwnProperty(hashLockKey)){
+        throw new Error("Unknown Lock: Cannot compute merkletree trying to remove Unknown lock");
+      }
       delete locks[hashLockKey];
 
        var mt = new merkletree.MerkleTree(map(Object.values(locks)
@@ -138,6 +145,23 @@ class ChannelStateSync{
 
       mt.generateHashTree();
       return mt;
+    }
+
+    getLockFromSecret(secret){
+      var hashLock = util.sha3(secret);
+      var hashLockKey = hashLock.toString('hex');
+      if(this.pendingLocks.hasOwnProperty(hashLockKey)){
+        return this.pendingLocks[hashLockKey];
+      }
+      if(this.openLocks.hasOwnProperty(hashLockKey)){
+        return this.pendingLocks[hashLockKey];
+      }
+      return null;
+    }
+
+    containsLock(lock){
+      var hashLockKey = lock.hashLock.toString("hex");
+      return this.pendingLocks.hasOwnProperty(hashLockKey) || this.openLocks.hasOwnProperty(hashLockKey);
     }
 
     get lockedAmount(){
