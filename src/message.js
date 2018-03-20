@@ -289,5 +289,5 @@ function GenerateRandomSecretHashPair(){
 module.exports= {
   SignedMessage,ProofMessage,DirectTransfer,LockedTransfer,MediatedTransfer,
   RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC,
-  GenerateRandom,StartEntropyCollector
+  GenerateRandomSecretHashPair,StartEntropyCollector
 }
