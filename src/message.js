@@ -272,7 +272,22 @@ class Ack{
   }
 }
 
+//entropy collector
+function StartEntropyCollector(){
+  sjcl.random.startCollectors();
+}
+//GLOBAL functions
+function GenerateRandomSecretHashPair(){
+  var randomBuffer = sjcl.random.randomWords(256/(4*8));
+  var secret = util.addHexPrefix(sjcl.codec.hex.fromBits(randomBuffer));
+  var hash= util.sha3(secret);
+  return {'secret': secret, 'hash':hash};
+}
+
+
+
 module.exports= {
   SignedMessage,ProofMessage,DirectTransfer,LockedTransfer,MediatedTransfer,
-  RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC
+  RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC,
+  GenerateRandom,StartEntropyCollector
 }
