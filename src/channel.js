@@ -1,5 +1,6 @@
-const message = require('message');
-const channelState = require('channelState');
+const message = require('./message');
+const channelState = require('./channelState');
+const util = require('ethereumjs-util');
 
 //Transfers apply state mutations to the channel object.  Once a transfer is verified
 //we apply it to the Channel
@@ -24,7 +25,7 @@ class Channel{
   //the amount of funds that can be sent from -> to in the payment channel
   transferrableFromTo(from,to){
     return from.depositBalance.sub((from.transferredAmount.add(from.lockedAmount).add(from.unlockedAmount))
-      .add(to.transferredAmount.add(to.unlockedAmount));
+      .add(to.transferredAmount.add(to.unlockedAmount)));
   }
 
 
@@ -137,7 +138,7 @@ class Channel{
     return true;
   }
 
-  function incrementedNonce(){
+  incrementedNonce(){
     return this.myState.nonce.add(new util.BN(1));
   }
 
@@ -213,171 +214,175 @@ class Channel{
   }
 
 
-
-
-}
-
-function ChannelManager(){
-  //my address
-  this.address;
-  //set by the blockchain monitor
-  this.currentBlockNumber;
-  this.channels ={};
+  //TODO: respond to block-chain events
 
 }
 
-ChannelManager.prototype.createOrFind = function(peerAddress){
-  if(this.channels.hasOwnProperty(peerAddress) && this.channels[peerAddress].state ===CHANNEL_STATE_OPENED){
-    return this.channels[peerAddress];
-  }
-  this.channels[peerAddress] = new Channel();
+module.exports = {
+  Channel
 }
 
-function Channel()
-{
-  //the channel contract API
-
-  //the channel contracts address
-  this.channelAddress;
-  this.peerState = new ChannelState();
-  this.myState = new ChannelState();
-  //we can have multiple in-flight states.The lock state is a probablisitc state transition as there is no gaurantee
-  //that the lock can be fulfilled.  Thus we leverage a merkle tree.  In the mean time however, the locks in flight make
-  //up for a pending balance and thus must be deducted from the overall channels balance until confirmed
-  this.peerPendingState =[];//deep clone of peerState
-  this.pendingState = [];//deep clone of myState ordered by nonce
-  this.channelId = null;
-  this.startBlock;
-  this.closeBlock;
-  this.settleTimeout;
-  this.channelState = CHANNEL_STATE_PENDING;
-}
-
-
-//complete update
-Channel.prototype.handle = function(event, endState){
-//
-}
-
-Channel.prototype.handleOnChain = function(event){
-  //update the on chain state when state transitions occur
-}
-
-//once a target shows they have the secret, send them a balance proof so channel stays open
-Channel.prototype.lockToBalanceProof = function(hashLock) {
-  throw new Error("convertLock converts revealed lock to balance proof");
-};
-
-
-// Channel.prototype.receiveLockTransfer = function(hashlock){
-//   this.peerState.registerLock(hashLock);
+// function ChannelManager(){
+//   //my address
+//   this.address;
+//   //set by the blockchain monitor
+//   this.currentBlockNumber;
+//   this.channels ={};
 
 // }
 
-// Channel.prototype.sendLockTransfer = function(hashlock){
-//   this.myState.registerLock(hashLock);
+// ChannelManager.prototype.createOrFind = function(peerAddress){
+//   if(this.channels.hasOwnProperty(peerAddress) && this.channels[peerAddress].state ===CHANNEL_STATE_OPENED){
+//     return this.channels[peerAddress];
+//   }
+//   this.channels[peerAddress] = new Channel();
 // }
 
-//once a secret is received, update from pending to revealed, request a balance proof from the from
-Channel.prototype.updateLockSecret = function(hashLock,secret){
-  throw new Error("updateLockSecret on the channel");
-}
+// function Channel()
+// {
+//   //the channel contract API
 
-Channel.prototype.sendReveal = function(hashLock,secret){
-  //if channelstate.pendingLocks[hashlock].expiration < currentBlock
-  //if channelState.pendingLocks[hashlock].target === from
-  // return revealSecret(secret)
-  throw new Error("sendReveal expected target has requested unlock");
-}
-//handle syncing the current channel to the onchain parameters
-Channel.prototype.sync = function(parameters) {
-
-};
-
-//create the channel on the blockchain.  This call is asynchronous, a channel cannot be used until
-//the blockchain monitor returns true
-Channel.prototype.create = function(){
-  //we have a service injection scenario where we need functions from the blockchain monitor to return
-  //before we can proceed
-}
-
-//create signed close channel transction
-Channel.prototype.closeTransaction = function(){
-
-}
+//   //the channel contracts address
+//   this.channelAddress;
+//   this.peerState = new ChannelState();
+//   this.myState = new ChannelState();
+//   //we can have multiple in-flight states.The lock state is a probablisitc state transition as there is no gaurantee
+//   //that the lock can be fulfilled.  Thus we leverage a merkle tree.  In the mean time however, the locks in flight make
+//   //up for a pending balance and thus must be deducted from the overall channels balance until confirmed
+//   this.peerPendingState =[];//deep clone of peerState
+//   this.pendingState = [];//deep clone of myState ordered by nonce
+//   this.channelId = null;
+//   this.startBlock;
+//   this.closeBlock;
+//   this.settleTimeout;
+//   this.channelState = CHANNEL_STATE_PENDING;
+// }
 
 
-//blockchain monitor can call this to update the state of a channel
-Channel.prototype.handleStateUpdate= function(){
+// //complete update
+// Channel.prototype.handle = function(event, endState){
+// //
+// }
 
-}
-//blockchain monitor will sync the deposits
-Channel.prototype.handleDeposit = function(){
+// Channel.prototype.handleOnChain = function(event){
+//   //update the on chain state when state transitions occur
+// }
 
-}
-
-//create signed deposit transaction on the contract
-Channel.prototype.deposit = function(){
-
-}
-//create ethereum transaction to withdraw revealed locks
-Channel.prototype.withdrawLocks = function(){
-
-}
+// //once a target shows they have the secret, send them a balance proof so channel stays open
+// Channel.prototype.lockToBalanceProof = function(hashLock) {
+//   throw new Error("convertLock converts revealed lock to balance proof");
+// };
 
 
-function ChannelState(options){
-  this.transfer_amount = options.transfer_amount || new util.BN(0); //BN
-  this.nonce = new util.BN(options.nonce) || new util.BN(0); //BN
-  if(!options.random_hash){
-      options.random_hash = ((generateRandomHash()).hash).toString("hex");
-  }
-  this.random_hash = options.random_hash;
-  this.sig = options.sig || null;
-  this.hashlockRoot = null;
-  //this holds a list of all locks which unlock money to you.  You want to convert this to a balance proof.
-  this.revealedLocks = [];
-  //these are the locks that you have created that your waiting to send secret for
-  //on ack of secret revealed, we remove it from pendingLocks and move it to the partner states revealed Locks
-  this.pendingLocks = [];
+// // Channel.prototype.receiveLockTransfer = function(hashlock){
+// //   this.peerState.registerLock(hashLock);
 
-}
+// // }
 
-ChannelState.prototype.registerLock= function(lock){
-  //when a lock secret is pending
-}
+// // Channel.prototype.sendLockTransfer = function(hashlock){
+// //   this.myState.registerLock(hashLock);
+// // }
 
-//we do not allow further transfers if there is a pending lock
-//this definitely needs rework in the future build
-//we have to wait for lock timeout to expire in order to reclaim locked amount
-//we may have it that the sum of locked amounts and transferred amount to prevent blocking payment channel with locks;
-ChannelState.prototype.isLocked = function(){
-  return this.pendingLocks.length > 0;
-}
+// //once a secret is received, update from pending to revealed, request a balance proof from the from
+// Channel.prototype.updateLockSecret = function(hashLock,secret){
+//   throw new Error("updateLockSecret on the channel");
+// }
 
-ChannelState.prototype.updateState = function(amount){
-  //TODO, ensure this state has been pushed somewhere or your done!
-  this.transfer_amount += amount;
-  this.nonce += 1;
-  this.random_hash = ((generateRandomHash()).hash).toString("hex");
-}
+// Channel.prototype.sendReveal = function(hashLock,secret){
+//   //if channelstate.pendingLocks[hashlock].expiration < currentBlock
+//   //if channelState.pendingLocks[hashlock].target === from
+//   // return revealSecret(secret)
+//   throw new Error("sendReveal expected target has requested unlock");
+// }
+// //handle syncing the current channel to the onchain parameters
+// Channel.prototype.sync = function(parameters) {
 
-ChannelState.prototype.updateLockState = function(lockedAmount,targetAddress){
-  this.nonce += 1;
-  this.random_hash = ((generateRandomHash()).hash).toString("hex");
-  var hs = generateRandomHash();
-  this.locks.append({hs:hs, amount:lockedAmount, targetAddress: targetAddress});
+// };
 
-  //calculate hashLockRoot
-}
+// //create the channel on the blockchain.  This call is asynchronous, a channel cannot be used until
+// //the blockchain monitor returns true
+// Channel.prototype.create = function(){
+//   //we have a service injection scenario where we need functions from the blockchain monitor to return
+//   //before we can proceed
+// }
 
-//return a serialized channel state object
-ChannelState.prototype.serialize = function() {
-  return JSON.stringify(this);
-};
+// //create signed close channel transction
+// Channel.prototype.closeTransaction = function(){
+
+// }
 
 
+// //blockchain monitor can call this to update the state of a channel
+// Channel.prototype.handleStateUpdate= function(){
 
-function BalanceProof(){};
+// }
+// //blockchain monitor will sync the deposits
+// Channel.prototype.handleDeposit = function(){
 
-function AtomicSwap(){};
+// }
+
+// //create signed deposit transaction on the contract
+// Channel.prototype.deposit = function(){
+
+// }
+// //create ethereum transaction to withdraw revealed locks
+// Channel.prototype.withdrawLocks = function(){
+
+// }
+
+
+// function ChannelState(options){
+//   this.transfer_amount = options.transfer_amount || new util.BN(0); //BN
+//   this.nonce = new util.BN(options.nonce) || new util.BN(0); //BN
+//   if(!options.random_hash){
+//       options.random_hash = ((generateRandomHash()).hash).toString("hex");
+//   }
+//   this.random_hash = options.random_hash;
+//   this.sig = options.sig || null;
+//   this.hashlockRoot = null;
+//   //this holds a list of all locks which unlock money to you.  You want to convert this to a balance proof.
+//   this.revealedLocks = [];
+//   //these are the locks that you have created that your waiting to send secret for
+//   //on ack of secret revealed, we remove it from pendingLocks and move it to the partner states revealed Locks
+//   this.pendingLocks = [];
+
+// }
+
+// ChannelState.prototype.registerLock= function(lock){
+//   //when a lock secret is pending
+// }
+
+// //we do not allow further transfers if there is a pending lock
+// //this definitely needs rework in the future build
+// //we have to wait for lock timeout to expire in order to reclaim locked amount
+// //we may have it that the sum of locked amounts and transferred amount to prevent blocking payment channel with locks;
+// ChannelState.prototype.isLocked = function(){
+//   return this.pendingLocks.length > 0;
+// }
+
+// ChannelState.prototype.updateState = function(amount){
+//   //TODO, ensure this state has been pushed somewhere or your done!
+//   this.transfer_amount += amount;
+//   this.nonce += 1;
+//   this.random_hash = ((generateRandomHash()).hash).toString("hex");
+// }
+
+// ChannelState.prototype.updateLockState = function(lockedAmount,targetAddress){
+//   this.nonce += 1;
+//   this.random_hash = ((generateRandomHash()).hash).toString("hex");
+//   var hs = generateRandomHash();
+//   this.locks.append({hs:hs, amount:lockedAmount, targetAddress: targetAddress});
+
+//   //calculate hashLockRoot
+// }
+
+// //return a serialized channel state object
+// ChannelState.prototype.serialize = function() {
+//   return JSON.stringify(this);
+// };
+
+
+
+// function BalanceProof(){};
+
+// function AtomicSwap(){};

@@ -1,10 +1,10 @@
-const merkletree = require('merkletree');
+const merkletree = require('./merkletree');
 const tx = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl-all');
 const rlp = require('rlp');
 const abi = require("ethereumjs-abi");
-const message = require('message');
+const message = require('./message');
 
 
 class LockWithSecret extends message.Lock{
@@ -15,13 +15,13 @@ class LockWithSecret extends message.Lock{
 }
 //Channel Endpoint state may not be updated directly, you must apply the appropriate message types
 //on the endstate.  The Ch
-class ChannelStateSync{
+class ChannelState{
   constructor(options){
-    this.proof = new ProofMessage(options.proof);
+    this.proof = options.proof ||new message.ProofMessage({});
     //dictionary of locks ordered by hashLock key
     this.pendingLocks = {};
     this.openLocks = {};
-    this.merkleTree = new merkletree.MerkleTree();
+    this.merkleTree = options.merkleTree || new merkletree.MerkleTree([]);
     //the amount the user has put into the channel
     this.depositBalance = options.depositBalance || new util.BN(0);
   }
@@ -72,7 +72,7 @@ class ChannelStateSync{
     if(!(this.pendingLocks.hasOwnProperty(hashLockKey) || this.openLocks.hasOwnProperty(hashLockKey))){
       throw new Error("Invalid Lock: uknown lock secret received");
     }
-    if((this.pendingLocks.hasOwnProperty(hashLockKey)){
+    if(this.pendingLocks.hasOwnProperty(hashLockKey)){
       //TODO this must be atomic operation, you will have to sanity check on restart
       //if we crash here, we will have the same lock twice...
       pendingLock = this.pendingLocks[hashLockKey];
@@ -199,7 +199,7 @@ class ChannelStateSync{
 }
 
 module.exports= {
-  ChannelStateSync
+  ChannelState
 };
 
 

@@ -286,6 +286,13 @@ function printTree(merkletree)
 
 }
 
+
+module.exports = {
+  MerkleTree,
+  checkMerkleProof,
+  checkMerkleProofOrdered
+}
+
 var elements = [];
 for(var i=0; i < 10; i++){
   elements.push(util.sha3("elem"+i));
@@ -325,7 +332,6 @@ debugger;
 var verified= checkMerkleProof(proof,merkletree.getRoot(),elements[9], 9+1 );
 debugger;
 
-module.exports = MerkleTree;
 
 //Expected Results for Ordered
 // [ <Buffer 21 2a fc 93 5a 56 85 e1 2f 22 19 57 13 fa c5 ba 98 98 9c 7d da 8b 07 64 f5 e8 25 6f c1 54 4a 07>,
