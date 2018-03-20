@@ -133,14 +133,86 @@ class Channel{
       from.applySecretToProof(transfer);
     }
     //validate all the values of a transfer prior to applying it to the StateSync
+
+    return true;
   }
 
-  //Validation functions
+  function incrementedNonce(){
+    return this.myState.nonce.add(new util.BN(1));
+  }
 
 
-  //TODO:CREATE ALL THE Proof Messages here
+  createLockedTransfer(msgID,hashLock,amount,expiration){
+    var transferrable = this.transferrableFromTo(this.myState,this.peerState);
+    if(amount.lte(new util.BN(0)) || transferrable.gt(amount)){
+      throw new Error("Insufficient funds: lock amount must be less than or equal to transferrable amount");
+    }
+    if(expiration.gt(SETTLE_TIMEOUT)){
+      throw new Error("Invalid expiration: lock expiration must be less than SETTLE_TIMEOUT");
+    }
 
-  //TODO: Handle block chain updates here
+    var lock = new message.Lock({amount:amount,expiration:expiration, hashLock:hashLock})
+
+
+    var lockedTransfer = new message.LockedTransfer({
+      msgID:msgID,
+      nonce: this.incrementedNonce(),
+      channelAddress: this.channelAddress,
+      transferredAmount:this.myState.transferredAmount,
+      to:this.peerState.address,
+      hashLockRoot:this.myState._computeMerkleTreeWithHashlock(lock).getRoot(),
+      lock:lock
+    });
+    return lockedTransfer;
+  }
+
+  createDirectTransfer(msgID,transferredAmount){
+    var transferrable = this.transferrableFromTo(this.myState, this.peerState);
+
+    if(transferredAmount.lte(new util.BN(0)) ||
+     transferredAmount.lte(this.myState.transferredAmount) ||
+     transferredAmount.sub(this.myState.transferredAmount).gt(transferrable)){
+      throw new Error("Insufficient funds: direct transfer cannot be completed");
+    }
+
+    var directTransfer = new message.DirectTransfer({
+      msgID:msgID,
+      nonce: this.incrementedNonce(),
+      channelAddress: this.channelAddress,
+      transferredAmount:transferredAmount,
+      to:this.peerState.address,
+      hashLockRoot:this.myState.merkleTree.getRoot()
+
+    });
+    return directTransfer;
+
+  }
+
+  createMediatedTransfer(msgID,hashLock,amount,expiration,target){
+    var lockedTransfer = this.createLockedTransfer(msgID,hashLock,amount,expiration);
+    var mediatedTransfer = new message.MediatedTransfer(Object.assign({target:target},lockedTransfer));
+    return mediatedTransfer;
+  }
+
+  createSecretToProof(msgID,secret){
+    var lock = this.myState.getLockFromSecret(secret);
+    if(!lock){
+      throw new Error("Invalid Secret: lock does not exist for secret");
+    }
+    var mt = this.myState._computeMerkleTreeWithoutHashlock(lock);
+    var transferredAmount = this.myState.transferredAmount.add(lock.amount);
+    var secretToProof = new message.SecretToProof({
+      msgID:msgID,
+      nonce:this.incrementedNonce(),
+      channelAddress: this.channelAddress,
+      transferredAmount:transferredAmount,
+      to:this.peerState.address,
+      hashLockRoot:mt.getRoot()
+    })
+    return secretToProof;
+  }
+
+
 
 
 }
