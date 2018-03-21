@@ -11,24 +11,34 @@ CHANNEL_STATE_OPENED = 'opened'
 CHANNEL_STATE_SETTLED = 'settled'
 CHANNEL_STATE_SETTLING = 'waiting_for_settle'
 
-SETTLE_TIMEOUT = new util.BN(100);
-REVEAL_TIMEOUT = new util.BN(50);
+
 
 class Channel{
 
-  constructor(peerState,myState,channelAddress){
+  constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout){
     this.peerState = peerState; //channelState.ChannelStateSync
     this.myState = myState;//channelState.ChannelStateSync
     this.channelAddress = channelAddress || message.EMTPY_32BYTE_BUFFER;
+    this.closedBlock = null;
+    this.settledBlock = null;
+    this.SETTLE_TIMEOUT = settleTimeout || new util.BN(100);
+    this.REVEAL_TIMEOUT = revealTimeout || new util.BN(50);
   }
+
 
   //the amount of funds that can be sent from -> to in the payment channel
-  transferrableFromTo(from,to){
-    return from.depositBalance.sub((from.transferredAmount.add(from.lockedAmount).add(from.unlockedAmount))
-      .add(to.transferredAmount.add(to.unlockedAmount)));
+  transferrableFromTo(from,to,currentBlock){
+    return from.depositBalance.sub((from.transferredAmount.add(from.lockedAmount(currentBlock)).add(from.unlockedAmount()))
+      .add(to.transferredAmount.add(to.unlockedAmount())));
   }
 
-
+  getChannelExpirationBlock(currentBlock){
+    if(this.closedBlock){
+      return this.closedBlock.add(this.SETTLE_TIMEOUT);
+    }else{
+      return currentBlock.add(this.SETTLE_TIMEOUT);
+    }
+  }
 
 
   handleRevealSecret(revealSecret){
@@ -57,17 +67,17 @@ class Channel{
 
   }
 
-  handleTransfer(transfer){
+  handleTransfer(transfer,currentBlock){
     //check the direction of data flow
 
     if(this.myState.address.compare(message.from) ==0){
-      this.handleTransferFromTo(this.myState,this.peerState,transfer);
+      this.handleTransferFromTo(this.myState,this.peerState,transfer,currentBlock);
     }else if(this.peerState.address.compare(message.from) ==0){
-      this.handleTransferFromTo(this.peerState,this.myState,transfer);
+      this.handleTransferFromTo(this.peerState,this.myState,transfer,currentBlock);
     }
   }
 
-  handleTransferFromTo(from,to,tansfer){
+  handleTransferFromTo(from,to,tansfer,currentBlock){
     if(!transfer instanceof ProofMessage){
       throw new Error("Invalid Transfer Type");
     }
@@ -96,7 +106,11 @@ class Channel{
       if(lock.amount.lte(new util.BN(0))){
         throw new Error("Invalid Lock: Lock amount must be greater than 0");
       }
-      if(lock.expiration.lte(SETTLE_TIMEOUT)){
+
+      //ensure that the lock we are receiving has an expiration time greater then the
+      //channel settlement, or else we have a potentially worthless lock :()
+      var expirationBlock = getChannelExpirationBlock(currentBlock);
+      if(lock.expiration.gt(expirationBlock)){
         throw new Error("Invalid Lock Expiration: Lock expiration must be less than SETTLE_TIMEOUT");
       }
 
@@ -121,7 +135,7 @@ class Channel{
       };
     }
 
-    var transferrable = this.transferrableFromTo(from,to);
+    var transferrable = this.transferrableFromTo(from,to,currentBlock);
     if(proof.transferredAmount.gt(transferrable)){
       throw new Error("Invalid transferredAmountL Insufficient Balance");
     }
@@ -142,17 +156,18 @@ class Channel{
     return this.myState.nonce.add(new util.BN(1));
   }
 
-
-  createLockedTransfer(msgID,hashLock,amount,expiration){
+  //expirationBlock is the absolute blockNumber when the lock expires
+  createLockedTransfer(msgID,hashLock,amount,expirationBlock){
     var transferrable = this.transferrableFromTo(this.myState,this.peerState);
     if(amount.lte(new util.BN(0)) || transferrable.gt(amount)){
       throw new Error("Insufficient funds: lock amount must be less than or equal to transferrable amount");
     }
-    if(expiration.gt(SETTLE_TIMEOUT)){
-      throw new Error("Invalid expiration: lock expiration must be less than SETTLE_TIMEOUT");
-    }
 
-    var lock = new message.Lock({amount:amount,expiration:expiration, hashLock:hashLock})
+    // if(expiration.lte(currentBlock.add(SETTLE_TIMEOUT))){
+    //   throw new Error("Invalid expiration: lock expiration must be less than SETTLE_TIMEOUT");
+    // }
+
+    var lock = new message.Lock({amount:amount,expiration:expirationBlock, hashLock:hashLock})
 
 
     var lockedTransfer = new message.LockedTransfer({
@@ -214,7 +229,14 @@ class Channel{
   }
 
 
+
   //TODO: respond to block-chain events
+  handleBlock(block){
+    if(this.currentBlock.lt(block)){
+      this.currentBlock = block;
+    }
+    //TODO dispatch block update event
+  }
 
 }
 

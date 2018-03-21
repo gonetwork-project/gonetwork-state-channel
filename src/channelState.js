@@ -164,18 +164,43 @@ class ChannelState{
       return this.pendingLocks.hasOwnProperty(hashLockKey) || this.openLocks.hasOwnProperty(hashLockKey);
     }
 
-    get lockedAmount(){
-      return _lockAmount(Object.values(this.pendingLocks));
+    get minOpenLockExpiration(){
+      return reduce(
+      map(Object.values(this.openLocks),function  (lock) {
+        return lock.expiration;
+      }),function (expiration,lock) {
+        if(lock.expiration.lt(expiration)){
+          return lock.expiration;
+        }
+        return expiration;
+      },new util.BN(0));
     }
 
-    get unlockedAmount(){
+    lockedAmount(currentBlock){
+      //we only want lockedAmounts that have not yet expired
+      return _lockAmount(Object.values(this.pendingLocks),currentBlock);
+    }
+
+    unlockedAmount(){
+       //we sort of disregard the expiration, the expiration of unlocked
+       //locks forces an onchain settle more then anything
        return _lockAmount(Object.values(this.openLocks));
     }
 
-    _lockAmount(locksArray){
+
+    _lockAmount(locksArray,currentBlock){
+      if(currentBlock){
        return reduce(locksArray,function(sum,lock){
+        if(lock.expiration.lt(currentBlock)){
+          return sum.add(lock.amount);
+        }
+        return sum;
+      }, new util.BN(0));
+     }else{
+      return reduce(locksArray,function(sum,lock){
         return sum.add(lock.amount);
       }, new util.BN(0));
+     }
     }
 
     balance(peerState){
