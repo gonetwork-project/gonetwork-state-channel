@@ -235,6 +235,10 @@ class RevealSecret extends SignedMessage{
       this.to]);
     return solidityHash;
   }
+
+  get hashLock(){
+    return util.sha3(this.secret);
+  }
 }
 
 //Once a secret is known, if we want to keep the payment channel alive longer

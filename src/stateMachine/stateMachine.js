@@ -1,6 +1,5 @@
 const machina = require('machina');
 const message = require('../message');
-const util = require('ethereumjs-util');
 
 //State change can only occur after a mutating action has taken place upstream
 //the transitions merely emit further actions.
@@ -62,7 +61,7 @@ const Initiator = new machina.BehavioralFsm( {
             receiveRevealSecret:function(state,secretReveal){
               console.log("PROCESSING revealSecret")
               if(secretReveal.from.compare(state.to)===0
-                && util.sha3(secretReveal.secret).compare(state.lock.hashLock)===0){
+                && state.lock.hashLock.compare(secretReveal.hashLock)===0){
                 console.log("SENDING SECRETTOPROOF");
                 this.transition(state,"completedTransfer");
               }
@@ -111,7 +110,8 @@ const Target = new machina.BehavioralFsm( {
             },
             receiveRevealSecret:function(state,revealSecret){
               console.log("PROCESSING revealSecret")
-              if(revealSecret.from.compare(state.from)===0){
+              if(revealSecret.from.compare(state.from)===0 &&
+                state.lock.hashLock.compare(revealSecret.hashLock)===0){
                 console.log("SENDING Reveal Secret Echo");
                 this.transition(state,"awaitSecretToProof");
               }
