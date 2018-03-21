@@ -42,7 +42,7 @@ class SignedMessage{
 
 
   constructor(options){
-    this.signature = null;
+    this.signature = options.signature || null;
   }
   //pack this object for signing
   getHash(){
@@ -230,7 +230,7 @@ class RevealSecret extends SignedMessage{
 
    getHash(){
      var solidityHash = abi.soliditySHA3(
-     [ "uint256", "address"],
+     [ "bytes32", "address"],
      [this.secret,
       this.to]);
     return solidityHash;
