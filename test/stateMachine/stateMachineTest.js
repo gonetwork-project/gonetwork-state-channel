@@ -40,8 +40,12 @@ test('test messages', function(t){
     }
     requestSecret.sign(privateKey);
     stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
-    assert.equal(revealSecret.from.compare(address),0);
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',revealSecret);
+    assert.equal(mediatedTransferState.__machina__['mediated-transfer'].state, 'awaitRevealSecret');
+    var receivedRevealSecret = new message.RevealSecret(JSON.parse(JSON.stringify(revealSecret),message.JSON_REVIVER_FUNC));
+    assert.equal(receivedRevealSecret.from.compare(address),0);
+
+    stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',receivedRevealSecret);
+    assert.equal(mediatedTransferState.__machina__['mediated-transfer'].state, 'completedTransfer');
     console.log(mediatedTransferState);
     //stateMachine.Target.handle(receiveMediatedTransfer,'init');
 
