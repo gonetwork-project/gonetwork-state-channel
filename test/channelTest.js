@@ -87,7 +87,19 @@ function computeMerkleTree(lockElements){
   return mt;
 }
 
+function printProof(myState){
 
+    console.log("R:"+myState.proof.signature.r.toString('hex'));
+    console.log("S:"+myState.proof.signature.s.toString('hex'));
+    console.log("V:"+myState.proof.signature.v);
+    console.log("SEND TO SOLIDITY APPEND HASH:"+myState.proof.nonce.toString(10) + "," +
+      myState.proof.transferredAmount.toString(10)+ "," +
+      "\""+util.addHexPrefix(myState.proof.channelAddress.toString('hex'))+ "\"," +
+      "\""+util.addHexPrefix(myState.proof.locksRoot.toString('hex'))+ "\"," +
+      "\""+util.addHexPrefix(myState.proof.messageHash.toString('hex'))+ "\""
+      )
+    console.log("OUR HASH:"+myState.proof.getHash().toString('hex'));
+}
 test('test messages', function(t){
   // t.test('empty merkle tree',function (assert) {
 
@@ -194,6 +206,8 @@ test('test messages', function(t){
     assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
     assert.equals(myState.unlockedAmount().eq(new util.BN(30)),true);
     assert.equals(myState.nonce.eq(new util.BN(2)),true);
+    assert.equals(myState.proof.from.compare(address),0);
+
 
 
     //lets unlock the second lock
@@ -211,6 +225,7 @@ test('test messages', function(t){
     assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
     assert.equals(myState.proof.transferredAmount.eq(new util.BN(20)),true);
     assert.equals(myState.proof.nonce.eq(new util.BN(3)),true);
+    assert.equals(myState.proof.from.compare(address),0);
 
 
     //now send proper locksroot
@@ -220,6 +235,8 @@ test('test messages', function(t){
     assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
     assert.equals(myState.proof.transferredAmount.eq(new util.BN(45)),true);
     assert.equals(myState.proof.nonce.eq(new util.BN(4)),true);
+    assert.equals(myState.proof.from.compare(address),0);
+
 
     //send 3rd mediated transfer
     myState.applyLockedTransfer(mediatedTansfer3);
@@ -228,7 +245,7 @@ test('test messages', function(t){
     assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
     assert.equals(myState.proof.transferredAmount.eq(new util.BN(45)),true);
     assert.equals(myState.proof.nonce.eq(new util.BN(5)),true);
-    console.log(JSON.stringify(myState.proof));
+    assert.equals(myState.proof.from.compare(address),0);
 
     //unlock the last secret
     myState.applyRevealSecret(revealSecret3);
@@ -236,6 +253,7 @@ test('test messages', function(t){
     assert.equals(myState.unlockedAmount().eq(new util.BN(40)),true);
     assert.equals(myState.proof.transferredAmount.eq(new util.BN(45)),true);
     assert.equals(myState.proof.nonce.eq(new util.BN(5)),true);
+    assert.equals(myState.proof.from.compare(address),0);
 
     //secret to proof for lock 1
     myState.applySecretToProof(s2p2);
@@ -244,6 +262,15 @@ test('test messages', function(t){
     assert.equals(myState.proof.transferredAmount.eq(new util.BN(55)),true);
     assert.equals(myState.proof.locksRoot.compare(testMT4.getRoot()),0);
     assert.equals(myState.proof.nonce.eq(new util.BN(6)),true);
+    assert.equals(myState.proof.from.compare(address),0);
+
+
+    printProof(myState);
+    //validate appending elements from solidity
+    //  function sh3(uint256 nonce,uint256 transfer_amount, address channel, bytes32 locksRoot,bytes32 hash)public constant returns(bytes32){
+    //     return keccak256(nonce,transfer_amount,channel,locksRoot,hash);
+    // }
+    assert.equals(myState.proof.getHash().toString('hex'),"1d4c75aed8c5ca13d1816f2e20b290f829505ec83025e4d95b3da3d4a78cc04d");
 
     myState.applySecretToProof(s2p3);
     assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
@@ -256,7 +283,7 @@ test('test messages', function(t){
     assert.equals(myState.proof.from.compare(address),0);
 
     assert.end();
-    console.log(myState.proof);
+
 
 
 
