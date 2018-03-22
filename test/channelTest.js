@@ -111,7 +111,7 @@ test('test messages', function(t){
 
     var myState = new channelState.ChannelState({depositBalance:new util.BN(123)});
     assertStateBN(assert,myState,0,123,0,0,0);
-
+    assert.equals(myState.proof.locksRoot.compare(myState.merkleTree.getRoot()),0, "Initial locksRoot and merkleTree.getRoot match");
 
     var locks=[{secret:util.toBuffer("SECRET1"),amount:10,expiration:20},
     {secret:util.toBuffer("SECRET2"),amount:20,expiration:40},
@@ -280,6 +280,8 @@ test('test messages', function(t){
 
     assert.equals(myState.proof.from.compare(address),0);
     assert.equals(myState.proof.getHash().toString('hex'),"f49336ce292e81ab68429a2a5d12b7e7e41328d4119e6a3feab3283f363f919d");
+    assert.equals(myState.proof.locksRoot.compare(myState.merkleTree.getRoot()),0, "Final locksRoot and merkleTree.getRoot match");
+
     assert.end();
 
 
