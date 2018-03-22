@@ -3,6 +3,7 @@ var stateMachine = require('../../src/stateMachine/stateMachine');
 var message = require('../../src/message');
 var sjcl = require('sjcl-all');
 var util = require('ethereumjs-util');
+var EventEmitter = require('events').EventEmitter;
 
 var privateKey =  util.toBuffer('0xe331b6d69882b4cb4ea581d88e0b604039a3de5967688d3dcffdd2270c0fd109');
 var publicKey =util.privateToPublic(privateKey);
@@ -12,25 +13,29 @@ var channelAddress = address.toString("hex");
 test('test messages', function(t){
   t.test('test initialize initiator',function  (assert) {
     var secret = "SECRET";
-    var mediatedTransfer = new message.MediatedTransfer({nonce:new  util.BN(10),
+    var mediatedTransfer = new message.MediatedTransfer({msgID:new util.BN(123),
+      nonce:new  util.BN(10),
       lock:{amount:new util.BN(100),expiration:new util.BN(20),hashLock:util.sha3(secret)},
       target:address,
-      to:address
+      to:address,
+      initiator:address,
     });
 
     mediatedTransfer.sign(privateKey);
 
     debugger
-
+    var emitter = new EventEmitter();
     var mediatedTransferState = Object.assign({},mediatedTransfer,{secret:secret});
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    stateMachine.Initiator.handle(mediatedTransferState,'init',emitter);
 
     //console.log(mediatedTransferState);
     var revealSecret = new message.RevealSecret({nonce:new  util.BN(10),secret:secret});
     revealSecret.sign(privateKey);
     var requestSecret = new message.RequestSecret({
       to:address,
-      hashLock:util.sha3(secret)
+      hashLock:util.sha3(secret),
+      amount:new util.BN(100),
+      msgID:new util.BN(123)
     });
 
     try{
@@ -38,6 +43,12 @@ test('test messages', function(t){
     }catch (e){
 
     }
+
+    stateMachine.Initiator.on('createSecretToProof',function  (ev) {
+      console.log(ev);
+    });
+
+
     requestSecret.sign(privateKey);
     stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
     assert.equal(mediatedTransferState.__machina__['mediated-transfer'].state, 'awaitRevealSecret');
@@ -52,6 +63,8 @@ test('test messages', function(t){
 
     var receiveMediatedTransfer = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer),message.JSON_REVIVER_FUNC));
     assert.equal(receiveMediatedTransfer.from.compare(mediatedTransfer.from),0);
+    assert.equal(receiveMediatedTransfer.initiator.compare(mediatedTransfer.initiator),0);
+
     stateMachine.Target.handle(receiveMediatedTransfer,'init');
     stateMachine.Target.handle(receiveMediatedTransfer,'receiveRevealSecret',revealSecret);
     assert.equal(receiveMediatedTransfer. __machina__['mediated-transfer'].state, 'awaitSecretToProof');

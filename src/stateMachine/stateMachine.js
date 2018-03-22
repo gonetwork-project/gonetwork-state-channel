@@ -16,8 +16,8 @@ function validRevealSecret(state,revealSecret){
 
 const Initiator = new machina.BehavioralFsm( {
 
-    initialize: function() {
-
+    initialize: function(eventEmitter) {
+      this.eventEmitter = eventEmitter;
         // your setup code goes here...
     },
 
@@ -29,7 +29,7 @@ const Initiator = new machina.BehavioralFsm( {
 
         init:{
           _onEnter:function (state) {
-            console.log("INIT ENTERED");
+
 
           },
           "*":"awaitRequestSecret",
@@ -42,8 +42,12 @@ const Initiator = new machina.BehavioralFsm( {
             receiveRequestSecret: function( state, requestSecret ) {
                 //this.deferUntilTransition();
 
-                if(state.target.compare(requestSecret.from)===0){
-                  this.emit("SendSecretRequest",JSON.stringify(this.mediatedTransferState ));
+                if(state.target.compare(requestSecret.from)===0 &&
+                  state.lock.hashLock.compare(requestSecret.hashLock)===0 &&
+                  state.lock.amount.eq(requestSecret.amount) &&
+                  state.msgID.eq(requestSecret.msgID)){
+                  this.emit("sendSecretRequest",state);
+
                   this.transition(state,"awaitRevealSecret",requestSecret);
                 }
 
@@ -60,9 +64,12 @@ const Initiator = new machina.BehavioralFsm( {
             },
             receiveRevealSecret:function(state,secretReveal){
               console.log("PROCESSING revealSecret")
+              //we only unlock if the partner state learned the secret
+              //not just anybody
               if(secretReveal.from.compare(state.to)===0
                 && state.lock.hashLock.compare(secretReveal.hashLock)===0){
-                console.log("SENDING SECRETTOPROOF");
+                console.log("createS2P(to:state.to)->sign(s2p)->channel[state.to].applySecretToProof(SP),send(S2P)");
+                this.emit("createSecretToProof",state);
                 this.transition(state,"completedTransfer");
               }
             },
@@ -96,7 +103,9 @@ const Target = new machina.BehavioralFsm( {
         init:{
           //mediated transfer state is a mediated transfer along with the secret
           _onEnter:function (state) {
-            console.log("Send RequestSecret message");
+            //TODO: check if the lock expiration make sense here?
+            this.emit('sendSecretRequest',state);
+            console.log("Send RequestSecret message to initiator:"+state.initiator.toString('hex'));
           },
           "*":"awaitRevealSecret",
           _onExit:function (state) {
@@ -110,9 +119,9 @@ const Target = new machina.BehavioralFsm( {
             },
             receiveRevealSecret:function(state,revealSecret){
               console.log("PROCESSING revealSecret")
-              if(revealSecret.from.compare(state.from)===0 &&
-                state.lock.hashLock.compare(revealSecret.hashLock)===0){
-                console.log("SENDING Reveal Secret Echo");
+              //reveal secret can come from anywhere!
+              if(state.lock.hashLock.compare(revealSecret.hashLock)===0){
+                this.emit('sendRevealSecret',state);
                 this.transition(state,"awaitSecretToProof");
               }
             },
@@ -124,7 +133,7 @@ const Target = new machina.BehavioralFsm( {
         awaitSecretToProof:{
           receiveSecretToProof:function(state,secretToProof){
             if(secretToProof.from.compare(state.from)===0){
-              console.log("Recevied SecretToProof");
+              this.emit('receiveSecretToProof',state);
               this.transition(state,"completedTransfer");
             };
 
