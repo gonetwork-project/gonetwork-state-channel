@@ -5,20 +5,18 @@ const util = require('ethereumjs-util');
 //Transfers apply state mutations to the channel object.  Once a transfer is verified
 //we apply it to the Channel
 CHANNEL_STATE_CLOSED = 'closed'
-CHANNEL_STATE_CLOSING = 'waiting_for_close'
-CHANNEL_STATE_PENDING = 'pending'
-CHANNEL_STATE_OPENED = 'opened'
+CHANNEL_STATE_OPEN = 'opened'
 CHANNEL_STATE_SETTLED = 'settled'
-CHANNEL_STATE_SETTLING = 'waiting_for_settle'
 
 
 
 class Channel{
 
-  constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout){
+  constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock){
     this.peerState = peerState; //channelState.ChannelStateSync
     this.myState = myState;//channelState.ChannelStateSync
     this.channelAddress = channelAddress || message.EMTPY_32BYTE_BUFFER;
+    this.openedBlock = currentBlock;
     this.closedBlock = null;
     this.settledBlock = null;
     this.SETTLE_TIMEOUT = settleTimeout || new util.BN(100);
@@ -40,6 +38,16 @@ class Channel{
     }
   }
 
+  get state(){
+    if(this.settledBlock){
+      return CHANNEL_STATE_SETTLED;
+    }
+    else if(this.closedBlock){
+      return CHANNEL_STATE_CLOSED;
+    }else {
+      return CHANNEL_STATE_OPEN;
+    }
+  }
 
   handleRevealSecret(revealSecret){
     //TODO: we dont care where it comes from?
@@ -70,11 +78,13 @@ class Channel{
   handleTransfer(transfer,currentBlock){
     //check the direction of data flow
 
-    if(this.myState.address.compare(message.from) ==0){
+    if(this.myState.address.compare(message.from) ===0){
       this.handleTransferFromTo(this.myState,this.peerState,transfer,currentBlock);
-    }else if(this.peerState.address.compare(message.from) ==0){
+    }else if(this.peerState.address.compare(message.from) ===0){
       this.handleTransferFromTo(this.peerState,this.myState,transfer,currentBlock);
     }
+    throw new Error("Invalid Transfer: unknown from");
+
   }
 
   handleTransferFromTo(from,to,tansfer,currentBlock){
