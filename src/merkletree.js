@@ -25,6 +25,9 @@ function MerkleTree(elements,ordered) {
 }
 
 MerkleTree.prototype.getRoot = function() {
+  if(this.elements.length ===0){
+    return Buffer.alloc(32);
+  }
   return this.levels[this.levels.length - 1][0]
 }
 
