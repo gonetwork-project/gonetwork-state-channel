@@ -51,7 +51,19 @@ function createMediatedTransfer(msgID,nonce,transferredAmount,channelAddress,loc
 }
 
 function createRevealSecret(to,secret){
-  return new message.RevealSecret({secret:secret,to:to});
+  return new message.RevealSecret({secret:util.toBuffer(secret),to:to});
+}
+
+function createSecretToProof (msgID,nonce,transferredAmount,channelAddress,locksRoot,to,secret) {
+  return new message.SecretToProof({
+    msgID:new util.BN(msgID),
+    nonce:new util.BN(nonce),
+    transferredAmount:new util.BN(transferredAmount),
+    channelAddress:util.toBuffer(channelAddress),
+    locksRoot:util.toBuffer(locksRoot), // locksRoot - sha3(secret)
+    to:util.toBuffer(to),
+    secret:util.toBuffer(secret)
+  });
 }
 
 function computeMerkleTree(lockElements){
@@ -71,9 +83,9 @@ test('test messages', function(t){
     assertStateBN(assert,myState,0,123,0,0,0);
 
 
-    var locks=[{secret:"SECRET1",amount:10,expiration:20},
-    {secret:"SECRET2",amount:20,expiration:40},
-    {secret:"SECRET3",amount:30,expiration:-20}];
+    var locks=[{secret:util.toBuffer("SECRET1"),amount:10,expiration:20},
+    {secret:util.toBuffer("SECRET2"),amount:20,expiration:40},
+    {secret:util.toBuffer("SECRET3"),amount:30,expiration:-20}];
 
     var testLocks = locks.map(function(lock){ return createTestLock(lock.amount,
       lock.expiration,
@@ -89,10 +101,13 @@ test('test messages', function(t){
     var testMT2 = computeMerkleTree(testLocks.slice(0,2))
     var mediatedTansfer2 = createMediatedTransfer(2,2,50,address,testMT2.getRoot(),address,
       address,address,testLocks[1]);
-
     mediatedTansfer2.sign(privateKey);
 
-
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to,secret)
+    var testMT3 = computeMerkleTree(testLocks.slice(0,1));
+    var s2p = createSecretToProof(2,3,testLocks[1].amount,address,testMT3.getRoot(),address,
+      locks[1].secret);
+    s2p.sign(privateKey);
 
 
 
@@ -107,6 +122,11 @@ test('test messages', function(t){
 
     var wrongRevealSecret = createRevealSecret(address,testLocks[1].secret);
     assert.throws(function(){myState.applyRevealSecret(wrongRevealSecret)},"Invalid Lock: uknown lock secret received");
+
+    //send a secretToProof of a future lock
+    assert.throws(function  () {
+      myState.applySecretToProof(s2p);
+    },"Invalid Lock: uknown lock secret received");
 
     assert.equals(myState.lockedAmount().eq(testLocks[0].amount),true);
     assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
@@ -134,6 +154,15 @@ test('test messages', function(t){
     assert.equals(myState.unlockedAmount().eq(new util.BN(30)),true);
     assert.equals(myState.nonce.eq(new util.BN(2)),true);
 
+
+    //lets unlock the second lock
+    console.log(JSON.stringify(s2p));
+    myState.applySecretToProof(s2p);
+
+    assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
+    assert.equals(myState.proof.transferredAmount.eq(new util.BN(20)),true);
+    assert.equals(myState.proof.nonce.eq(new util.BN(3)),true);
     // console.log(mt.getRoot());
     // console.log(testLock);
     // assert.equals(mt.getRoot().compare(testLock.getMessageHash()),0);
