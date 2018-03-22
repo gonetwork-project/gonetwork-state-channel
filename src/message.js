@@ -78,7 +78,31 @@ class SignedMessage{
 
 //Messages that encapsulate an on chain proof extend ProofMessage base class
 //A proof message maybe submitted onchain during settlement to allocate your funds
+class Proof extends SignedMessage{
+  constructor(options){
+    super(options);
+    this.nonce = TO_BN(options.nonce) || new util.BN(0);
+    this.transferredAmount = TO_BN(options.transferredAmount) || new util.BN(0);
+    this.locksRoot = options.locksRoot || EMPTY_32BYTE_BUFFER;
+    this.channelAddress = options.channelAddress || EMPTY_20BYTE_BUFFER;
+    this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
+    this.signature = options.signature || null;
+  }
 
+  getHash(){
+    var solidityHash = abi.soliditySHA3(
+     [ "uint256", "uint256", "address","bytes32","bytes32" ],
+     [this.nonce,
+      this.transferredAmount,
+      this.channelAddress,
+      this.locksRoot,
+      this.messageHash]);
+    return solidityHash;
+
+  }
+
+
+}
 class ProofMessage extends SignedMessage{
   constructor(options){
     super(options);
@@ -107,7 +131,15 @@ class ProofMessage extends SignedMessage{
   }
 
   toProof(){
-    return new ProofMessage(this);
+    return new Proof({
+      nonce:this.nonce,
+      transferredAmount:this.transferredAmount,
+      locksRoot:this.locksRoot,
+      channelAddress:this.channelAddress,
+      messageHash:this.getMessageHash(),
+      signature:this.signature
+    });
+
   }
 
 }
