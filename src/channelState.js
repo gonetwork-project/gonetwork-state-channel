@@ -82,7 +82,7 @@ class ChannelState{
   }
 
   applySecretToProof(secretToProof){
-    if(secretToProof instanceof message.SecretToProof){
+    if(!secretToProof instanceof message.SecretToProof){
       throw new Error("Invalid Message Type: SecretToProof expected");
     }
     var proof = secretToProof.toProof();
@@ -100,7 +100,7 @@ class ChannelState{
       throw new Error("Invalid Lock: uknown lock secret received");
     }
 
-    var mt = _computeMerkleTreeWithoutHashlock(pendingLock);
+    var mt = this._computeMerkleTreeWithoutHashlock(pendingLock);
     if(!mt.getRoot().compare(proof.locksRoot) ==0){
       throw new Error("Invalid hashLockRoot in SecretToProof");
     }
