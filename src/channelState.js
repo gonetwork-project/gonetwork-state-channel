@@ -42,9 +42,9 @@ class ChannelState{
     if(this.pendingLocks.hasOwnProperty(hashLockKey) || this.openLocks.hasOwnProperty(hashLockKey)){
       throw new Error("Invalid Lock: lock already registered");
     }
-    var mt = _computeMerkleTreeWithHashlock(lock);
+    var mt = this._computeMerkleTreeWithHashlock(lock);
 
-    if(mt.getRoot().compare(proof.hashLockRoot)!= 0){
+    if(mt.getRoot().compare(proof.locksRoot)!= 0){
         throw new Error("Invalid hashLockRoot");
     };
     this.pendingLocks[hashLockKey] = lock;
@@ -56,7 +56,7 @@ class ChannelState{
     if(!directTransfer instanceof message.DirectTransfer){
       throw new Error("Invalid Message Type: DirectTransfer expected");
     }
-    if(this.merkleTree.getRoot().compare(directTransfer.hashLockRoot)==0){
+    if(this.merkleTree.getRoot().compare(directTransfer.locksRoot)==0){
       throw new Error("Invalid hashLockRoot");
     }
     this.proof = directTransfer.toProof();
@@ -66,7 +66,7 @@ class ChannelState{
     if(!revealSecret instanceof message.RevealSecret){
       throw new Error("Invalid Message Type: RevealSecret expected");
     }
-    var hashLock = util.sha3(revealSecret.secret);
+    var hashLock = revealSecret.hashLock;
     var hashLockKey = hashLock.toString('hex');
     var pendingLock = null;
     if(!(this.pendingLocks.hasOwnProperty(hashLockKey) || this.openLocks.hasOwnProperty(hashLockKey))){
@@ -76,7 +76,7 @@ class ChannelState{
       //TODO this must be atomic operation, you will have to sanity check on restart
       //if we crash here, we will have the same lock twice...
       pendingLock = this.pendingLocks[hashLockKey];
-      this.openLocks[hashLockKey] = new LockWithSecret(pendingLock,secret);
+      this.openLocks[hashLockKey] = new LockWithSecret(pendingLock,revealSecret.secret);
       delete this.pendingLocks[hashLockKey];
     }
   }
@@ -87,7 +87,7 @@ class ChannelState{
     }
     var proof = secretToProof.toProof();
     var secret = secretToProof.secret;
-    var hashLock = util.sha3(secret);
+    var hashLock = secretToProof.hashLock;
     var hashLockKey = hashLock.toString('hex');
 
     var pendingLock = null;
@@ -101,7 +101,7 @@ class ChannelState{
     }
 
     var mt = _computeMerkleTreeWithoutHashlock(pendingLock);
-    if(!mt.getRoot().compare(proof.hashLockRoot) ==0){
+    if(!mt.getRoot().compare(proof.locksRoot) ==0){
       throw new Error("Invalid hashLockRoot in SecretToProof");
     }
 
@@ -121,8 +121,8 @@ class ChannelState{
   }
 
    _computeMerkleTreeWithHashlock(lock){
-      var mt = new merkletree.MerkleTree(map(Object.values(Object.assign({},this.pendingLocks, this.openLocks)).concat(lock)
-        ,function (l) {
+      var mt = new merkletree.MerkleTree(Object.values(Object.assign({},this.pendingLocks, this.openLocks)).concat(lock).map(
+        function (l) {
         return l.getMessageHash();
       }));
 
@@ -138,8 +138,8 @@ class ChannelState{
       }
       delete locks[hashLockKey];
 
-       var mt = new merkletree.MerkleTree(map(Object.values(locks)
-        ,function (l) {
+       var mt = new merkletree.MerkleTree(Object.values(locks).map(
+        function (l) {
         return l.getMessageHash();
       }));
 
@@ -178,26 +178,26 @@ class ChannelState{
 
     lockedAmount(currentBlock){
       //we only want lockedAmounts that have not yet expired
-      return _lockAmount(Object.values(this.pendingLocks),currentBlock);
+      return this._lockAmount(Object.values(this.pendingLocks),currentBlock);
     }
 
     unlockedAmount(){
        //we sort of disregard the expiration, the expiration of unlocked
        //locks forces an onchain settle more then anything
-       return _lockAmount(Object.values(this.openLocks));
+       return this._lockAmount(Object.values(this.openLocks));
     }
 
 
     _lockAmount(locksArray,currentBlock){
       if(currentBlock){
-       return reduce(locksArray,function(sum,lock){
+       return locksArray.reduce(function(sum,lock){
         if(lock.expiration.lt(currentBlock)){
           return sum.add(lock.amount);
         }
         return sum;
       }, new util.BN(0));
      }else{
-      return reduce(locksArray,function(sum,lock){
+      return locksArray.reduce(function(sum,lock){
         return sum.add(lock.amount);
       }, new util.BN(0));
      }
