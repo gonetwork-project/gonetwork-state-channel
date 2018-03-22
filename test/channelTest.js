@@ -5,6 +5,7 @@ var channel = require('../src/Channel');
 const util = require('ethereumjs-util');
 const message =require('../src/message');
 
+
 var privateKey =  util.toBuffer('0xe331b6d69882b4cb4ea581d88e0b604039a3de5967688d3dcffdd2270c0fd109');
 var publicKey =util.privateToPublic(privateKey);
 var address = util.pubToAddress(publicKey);
@@ -66,6 +67,17 @@ function createSecretToProof (msgID,nonce,transferredAmount,channelAddress,locks
   });
 }
 
+function createDirectTransfer (msgID,nonce,transferredAmount,channelAddress,locksRoot,to) {
+  return new message.DirectTransfer({
+    msgID:new util.BN(msgID),
+    nonce:new util.BN(nonce),
+    transferredAmount:new util.BN(transferredAmount),
+    channelAddress:util.toBuffer(channelAddress),
+    locksRoot:util.toBuffer(locksRoot), // locksRoot - sha3(secret)
+    to:util.toBuffer(to)
+  });
+}
+
 function computeMerkleTree(lockElements){
   var mt = new merkleTree.MerkleTree(lockElements.map(
         function (l) {
@@ -77,7 +89,13 @@ function computeMerkleTree(lockElements){
 
 
 test('test messages', function(t){
-  t.test('can initialize ChannelState',function (assert) {
+  // t.test('empty merkle tree',function (assert) {
+
+  //   var mt = new merkleTree.MerkleTree([]);
+  //   assert.equals(mt.getRoot().compare(Buffer.alloc(32)),0);
+  //   assert.end()// body...
+  // })
+  t.test('ChannelState:mediatedTansfer+mediatedTansfer+RevealSecret+WrongRevealSecret+RevealSecret+SecretToProof',function (assert) {
 
     var myState = new channelState.ChannelState({depositBalance:new util.BN(123)});
     assertStateBN(assert,myState,0,123,0,0,0);
@@ -103,13 +121,36 @@ test('test messages', function(t){
       address,address,testLocks[1]);
     mediatedTansfer2.sign(privateKey);
 
+
+
     //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to,secret)
     var testMT3 = computeMerkleTree(testLocks.slice(0,1));
     var s2p = createSecretToProof(2,3,testLocks[1].amount,address,testMT3.getRoot(),address,
       locks[1].secret);
     s2p.sign(privateKey);
 
+        //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var dt = createDirectTransfer(3,4,45,address,testMT2.getRoot(),address);
+    var invalidDt = createDirectTransfer(3,4,45,address,testMT3.getRoot(),address);
+    dt.sign(privateKey);
 
+    var testMT4 = computeMerkleTree([testLocks[0],testLocks[2]]);
+    var mediatedTansfer3 = createMediatedTransfer(4,5,45,address,testMT4.getRoot(),address,
+      address,address,testLocks[2]);
+    mediatedTansfer3.sign(privateKey);
+
+    var revealSecret3 = createRevealSecret(address,locks[2].secret);
+    revealSecret3.sign(privateKey);
+
+    var testMT4 = computeMerkleTree([testLocks[2]]);
+    var s2p2 = createSecretToProof(1,6,new util.BN(55),address,testMT4.getRoot(),address,
+      locks[0].secret);
+    s2p2.sign(privateKey);
+
+    var testMT5 = new merkleTree.MerkleTree([]);
+    var s2p3 = createSecretToProof(4,7,new util.BN(85),address,testMT5.getRoot(),address,
+      locks[2].secret);
+    s2p3.sign(privateKey);
 
     myState.applyLockedTransfer(mediatedTansfer);
     console.log("APPLIED MEDIATED TRANSFER:"+JSON.stringify(myState));
@@ -163,11 +204,74 @@ test('test messages', function(t){
     assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
     assert.equals(myState.proof.transferredAmount.eq(new util.BN(20)),true);
     assert.equals(myState.proof.nonce.eq(new util.BN(3)),true);
-    // console.log(mt.getRoot());
-    // console.log(testLock);
-    // assert.equals(mt.getRoot().compare(testLock.getMessageHash()),0);
-    assert.end();
 
+    //send dt with rock locksRoot
+    assert.throws(function(){myState.applyDirectTransfer(invalidDt)},"Invalid hashLockRoot");
+    assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
+    assert.equals(myState.proof.transferredAmount.eq(new util.BN(20)),true);
+    assert.equals(myState.proof.nonce.eq(new util.BN(3)),true);
+
+
+    //now send proper locksroot
+    myState.applyDirectTransfer(dt);
+
+    assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
+    assert.equals(myState.proof.transferredAmount.eq(new util.BN(45)),true);
+    assert.equals(myState.proof.nonce.eq(new util.BN(4)),true);
+
+    //send 3rd mediated transfer
+    myState.applyLockedTransfer(mediatedTansfer3);
+
+    assert.equals(myState.lockedAmount().eq(new util.BN(30)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(10)),true);
+    assert.equals(myState.proof.transferredAmount.eq(new util.BN(45)),true);
+    assert.equals(myState.proof.nonce.eq(new util.BN(5)),true);
+    console.log(JSON.stringify(myState.proof));
+
+    //unlock the last secret
+    myState.applyRevealSecret(revealSecret3);
+    assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(40)),true);
+    assert.equals(myState.proof.transferredAmount.eq(new util.BN(45)),true);
+    assert.equals(myState.proof.nonce.eq(new util.BN(5)),true);
+
+    //secret to proof for lock 1
+    myState.applySecretToProof(s2p2);
+    assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(30)),true);
+    assert.equals(myState.proof.transferredAmount.eq(new util.BN(55)),true);
+    assert.equals(myState.proof.locksRoot.compare(testMT4.getRoot()),0);
+    assert.equals(myState.proof.nonce.eq(new util.BN(6)),true);
+
+    myState.applySecretToProof(s2p3);
+    assert.equals(myState.lockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.proof.transferredAmount.eq(new util.BN(85)),true);
+    assert.equals(myState.proof.locksRoot.compare(testMT5.getRoot()),0);
+    assert.equals(myState.proof.nonce.eq(new util.BN(7)),true);
+
+
+    assert.equals(myState.proof.from.compare(address),0);
+
+    assert.end();
+    console.log(myState.proof);
+
+
+
+    // var solidityHash = abi.soliditySHA3(
+    //  [ "uint256", "uint256", "address","bytes32","bytes32" ],
+    //  [myState.proof..nonce,
+    //   myState.proof..transferredAmount,
+    //   myState.proof..channelAddress,
+    //   myState.proof..locksRoot,
+    //   myState.proof.]);
+    // return solidityHash;
+    // var pk = util.ecrecover(buffer,myState.proof.signature.v,util.toBuffer(myState.proof.signature.r),
+    //   util.toBuffer(myState.proof.signature.s));
+    // var address = util.pubToAddress(pk);
+    return address;
   })
 
   t.test('register transfer to unknown channel',function  (assert) {
