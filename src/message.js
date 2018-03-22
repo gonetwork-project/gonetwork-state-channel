@@ -107,8 +107,7 @@ class ProofMessage extends SignedMessage{
   }
 
   toProof(){
-    return new ProofMessage(this.nonce, this.transferredAmount,
-      this.locksRoot,this.channelAddress,this.getMessageHash(),this.signature);
+    return new ProofMessage(this);
   }
 
 }
@@ -166,8 +165,6 @@ class LockedTransfer extends DirectTransfer{
   }
 
   getMessageHash(){
-      console.log("HASH LockedTransfer");
-
      var solidityHash = abi.soliditySHA3(
      ["uint256",  "uint256", "uint256", "address","bytes32","address","bytes32" ],
      [this.msgID,
@@ -186,11 +183,12 @@ class MediatedTransfer extends LockedTransfer{
   constructor(options){
     super(options);
     this.target = options.target || EMPTY_20BYTE_BUFFER; //EthAddress
+    this.initiator = options.initiator || EMPTY_20BYTE_BUFFER;//EthAddress
   }
 
   getMessageHash(){
      var solidityHash = abi.soliditySHA3(
-     ["uint256",  "uint256", "uint256", "address","bytes32","address","address","bytes32" ],
+     ["uint256",  "uint256", "uint256", "address","bytes32","address","address","address","bytes32" ],
      [this.msgID,
       this.nonce,
       this.transferredAmount,
@@ -198,6 +196,7 @@ class MediatedTransfer extends LockedTransfer{
       this.locksRoot,
       this.to,
       this.target,
+      this.initiator,
       this.lock.getMessageHash()]);
     return solidityHash;
   }
@@ -263,6 +262,10 @@ class SecretToProof extends ProofMessage{
       this.to,
       this.secret]);
     return solidityHash;
+  }
+
+  get hashLock(){
+    return util.sha3(this.secret);
   }
 
 }
