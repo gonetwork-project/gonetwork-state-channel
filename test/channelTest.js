@@ -263,8 +263,6 @@ test('test messages', function(t){
     assert.equals(myState.proof.locksRoot.compare(testMT4.getRoot()),0);
     assert.equals(myState.proof.nonce.eq(new util.BN(6)),true);
     assert.equals(myState.proof.from.compare(address),0);
-
-
     printProof(myState);
     //validate appending elements from solidity
     //  function sh3(uint256 nonce,uint256 transfer_amount, address channel, bytes32 locksRoot,bytes32 hash)public constant returns(bytes32){
@@ -278,10 +276,10 @@ test('test messages', function(t){
     assert.equals(myState.proof.transferredAmount.eq(new util.BN(85)),true);
     assert.equals(myState.proof.locksRoot.compare(testMT5.getRoot()),0);
     assert.equals(myState.proof.nonce.eq(new util.BN(7)),true);
-
+    printProof(myState);
 
     assert.equals(myState.proof.from.compare(address),0);
-
+    assert.equals(myState.proof.getHash().toString('hex'),"f49336ce292e81ab68429a2a5d12b7e7e41328d4119e6a3feab3283f363f919d");
     assert.end();
 
 
