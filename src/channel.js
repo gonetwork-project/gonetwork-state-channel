@@ -15,7 +15,7 @@ class Channel{
   constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock){
     this.peerState = peerState; //channelState.ChannelStateSync
     this.myState = myState;//channelState.ChannelStateSync
-    this.channelAddress = channelAddress || message.EMTPY_32BYTE_BUFFER;
+    this.channelAddress = channelAddress || message.EMPTY_20BYTE_BUFFER;
     this.openedBlock = currentBlock;
     this.closedBlock = null;
     this.settledBlock = null;
@@ -26,8 +26,9 @@ class Channel{
 
   //the amount of funds that can be sent from -> to in the payment channel
   transferrableFromTo(from,to,currentBlock){
-    return from.depositBalance.sub((from.transferredAmount.add(from.lockedAmount(currentBlock)).add(from.unlockedAmount()))
-      .add(to.transferredAmount.add(to.unlockedAmount())));
+    return from.depositBalance.
+    sub((from.transferredAmount.add(from.lockedAmount(currentBlock)).add(from.unlockedAmount())))
+    .add(to.transferredAmount.add(to.unlockedAmount()));
   }
 
   getChannelExpirationBlock(currentBlock){
@@ -78,22 +79,23 @@ class Channel{
   handleTransfer(transfer,currentBlock){
     //check the direction of data flow
 
-    if(this.myState.address.compare(message.from) ===0){
+    if(this.myState.address.compare(transfer.from) ==0){
       this.handleTransferFromTo(this.myState,this.peerState,transfer,currentBlock);
-    }else if(this.peerState.address.compare(message.from) ===0){
+    }else if(this.peerState.address.compare(transfer.from) ==0){
       this.handleTransferFromTo(this.peerState,this.myState,transfer,currentBlock);
+    }else{
+      throw new Error("Invalid Transfer: unknown from");
     }
-    throw new Error("Invalid Transfer: unknown from");
 
   }
 
-  handleTransferFromTo(from,to,tansfer,currentBlock){
-    if(!transfer instanceof ProofMessage){
+  handleTransferFromTo(from,to,transfer,currentBlock){
+    if(!transfer instanceof message.ProofMessage){
       throw new Error("Invalid Transfer Type");
     }
 
     var proof = transfer.toProof();
-    if(!proof.channelAddress.eq(this.channelAddress)){
+    if(proof.channelAddress.compare(this.channelAddress)!==0){
       throw new Error("Invalid Channel Address");
     }
 
@@ -109,7 +111,7 @@ class Channel{
         throw new Error("Invalid Lock: Lock registered previously");
       }
       var mtValidate = from._computeMerkleTreeWithHashlock(lock);
-      if(mtValidate.getRoot().compare(proof.hashLockRoot)!==0){
+      if(mtValidate.getRoot().compare(proof.locksRoot)!==0){
         throw new Error("Invalid LocksRoot for LockedTransfer");
       }
       //validate lock as well
@@ -126,10 +128,10 @@ class Channel{
 
     }else if(transfer instanceof message.SecretToProof){
       var mtValidate = from._computeMerkleTreeWithoutHashlock(transfer.lock);
-      if(mtValidate.getRoot().compare(proof.hashLockRoot)!==0){
+      if(mtValidate.getRoot().compare(proof.locksRoot)!==0){
         throw new Error("Invalid LocksRoot for SecretToProof");
       }
-    }else if(from.merkleTree.getRoot().compare(proof.hashLockRoot) !==0){
+    }else if(from.merkleTree.getRoot().compare(proof.locksRoot) !==0){
       throw new Error("Invalid LocksRoot for SecretToProof");
     }
 
@@ -186,7 +188,7 @@ class Channel{
       channelAddress: this.channelAddress,
       transferredAmount:this.myState.transferredAmount,
       to:this.peerState.address,
-      hashLockRoot:this.myState._computeMerkleTreeWithHashlock(lock).getRoot(),
+      locksRoot:this.myState._computeMerkleTreeWithHashlock(lock).getRoot(),
       lock:lock
     });
     return lockedTransfer;
@@ -207,7 +209,7 @@ class Channel{
       channelAddress: this.channelAddress,
       transferredAmount:transferredAmount,
       to:this.peerState.address,
-      hashLockRoot:this.myState.merkleTree.getRoot()
+      locksRoot:this.myState.merkleTree.getRoot()
 
     });
     return directTransfer;
