@@ -183,9 +183,9 @@ class ChannelState{
       },new util.BN(0));
     }
 
-    lockedAmount(currentBlock){
+    lockedAmount(safeBlock){
       //we only want lockedAmounts that have not yet expired
-      return this._lockAmount(Object.values(this.pendingLocks),currentBlock);
+      return this._lockAmount(Object.values(this.pendingLocks),safeBlock);
     }
 
     unlockedAmount(){
@@ -195,10 +195,13 @@ class ChannelState{
     }
 
 
-    _lockAmount(locksArray,currentBlock){
-      if(currentBlock){
+    _lockAmount(locksArray,safeBlock){
+
+      if(safeBlock){
+        safeBlock = message.TO_BN(safeBlock);
        return locksArray.reduce(function(sum,lock){
-        if(lock.expiration.lt(currentBlock)){
+        if(lock.expiration.gt(safeBlock)){
+
           return sum.add(lock.amount);
         }
         return sum;

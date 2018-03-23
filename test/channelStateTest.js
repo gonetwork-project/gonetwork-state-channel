@@ -116,6 +116,8 @@ test('channelState test', function(t){
   //   assert.equals(mt.getRoot().compare(Buffer.alloc(32)),0);
   //   assert.end()// body...
   // })
+
+
   t.test('ChannelState:mediatedTansfer+mediatedTansfer+RevealSecret+WrongRevealSecret+RevealSecret+SecretToProof',function (assert) {
 
     var myState = new channelState.ChannelState({depositBalance:new util.BN(123)});
@@ -312,6 +314,30 @@ test('channelState test', function(t){
     return address;
   })
 
+  t.test('test lockedAmount removes expired locks',function (assert) {
+     var locks=[{secret:util.toBuffer("SECRET1"),amount:10,expiration:20},
+    {secret:util.toBuffer("SECRET2"),amount:20,expiration:40},
+    {secret:util.toBuffer("SECRET3"),amount:30,expiration:80}];
+
+    var testLocks = locks.map(function(lock){ return createTestLock(lock.amount,
+      lock.expiration,
+      lock.secret)});
+    var myState = new channelState.ChannelState({depositBalance:new util.BN(123)});
+    myState.pendingLocks = testLocks.splice(0,2);
+
+    //all pending locks valid
+    assert.equals(myState.lockedAmount(new util.BN(0)).eq(new util.BN(30)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
+    //firt lock expires
+    assert.equals(myState.lockedAmount(new util.BN(21)).eq(new util.BN(20)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
+
+    //second lock expires
+    assert.equals(myState.lockedAmount(new util.BN(41)).eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
+
+    assert.end()
+  })
   t.test('register transfer to unknown channel',function  (assert) {
 
     assert.end();
