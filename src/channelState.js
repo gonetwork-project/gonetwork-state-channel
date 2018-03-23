@@ -24,10 +24,15 @@ class ChannelState{
     this.merkleTree = options.merkleTree || new merkletree.MerkleTree([]);
     //the amount the user has put into the channel
     this.depositBalance = options.depositBalance || new util.BN(0);
+    this.address = options.address || message.EMPTY_20BYTE_BUFFER;
   }
 
   get nonce(){
     return this.proof.nonce;
+  }
+
+  get transferredAmount(){
+    return this.proof.transferredAmount;
   }
 
   applyLockedTransfer(lockedTransfer){
@@ -56,7 +61,9 @@ class ChannelState{
     if(!directTransfer instanceof message.DirectTransfer){
       throw new Error("Invalid Message Type: DirectTransfer expected");
     }
-    if(this.merkleTree.getRoot().compare(directTransfer.locksRoot)==0){
+    // console.log("APPLY DIRECT TRANSFER:"+ this.merkleTree.getRoot().toString('hex'));
+    // console.log("APPLY DIRECT TRANSFER:"+ directTransfer.locksRoot.toString('hex'));
+    if(this.merkleTree.getRoot().compare(directTransfer.locksRoot)!==0){
       throw new Error("Invalid hashLockRoot");
     }
     this.proof = directTransfer.toProof();
