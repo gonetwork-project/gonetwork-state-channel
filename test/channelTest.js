@@ -299,12 +299,179 @@ test('test channel', function(t){
     teardown();
   })
 
-  //Shoul not create transfer  where transferredAmouunt > transferrable
-  //Should not accept transfer balance whose transferredAmount > transferrable
-  //should not accept transfer balance with wrong locksRoot
-  //should not accept unsigned transfer balance
-  //should not accept transfer with decremented nonce
-  //should not accept transfer with nonce > nonce+1
+  t.test('channel component test: direct transfer should not createDirectTransfer when transferredAmount > transferrable',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(124);
+    assert.throws(function(){
+      var directTransfer = channel.createDirectTransfer(msgID,transferredAmount);
+    },"Insufficient funds: direct transfer cannot be completed");
+    //ensure the state wasnt updated when transfer was created
+    assertStateBN(assert,myState,0,123,0,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.end();
+
+
+    teardown();
+  });
+
+  t.test('channel component test: direct transfer should not handleTransfer when transferredAmount < state.transferredAmount',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(40);
+    var transferredAmountFail = new util.BN(30);
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var directTransfer = createDirectTransfer(msgID,1,transferredAmount,address,Buffer.alloc(32),pk_addr[1].address);
+    directTransfer.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,1,address,40,Buffer.alloc(32),pk_addr[1].address);
+    channel.handleTransfer(directTransfer,new util.BN(2));
+    assertStateBN(assert,myState,1,123,40,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+
+    var directTransferFail = createDirectTransfer(msgID,2,transferredAmountFail,address,Buffer.alloc(32),pk_addr[1].address);
+    directTransferFail.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransferFail,pk_addr[0].address,2,address,30,Buffer.alloc(32),pk_addr[1].address);
+
+    assert.throws(function(){
+      channel.handleTransfer(directTransferFail,new util.BN(2));
+    },
+      new Error("Invalid transferredAmount: must be monotonically increasing value"));
+
+    assertStateBN(assert,myState,1,123,40,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    //handle the signed transfer
+
+
+    assert.end();
+
+
+    teardown();
+  });
+
+  t.test('channel component test: direct transfer should not handleTransfer when transferredAmount > transferrable',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(124);
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var directTransfer = createDirectTransfer(msgID,1,transferredAmount,address,Buffer.alloc(32),pk_addr[1].address);
+    directTransfer.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,1,address,124,Buffer.alloc(32),pk_addr[1].address);
+
+    //handle the signed transfer
+    assert.throws(function(){channel.handleTransfer(directTransfer,new util.BN(2));},new Error("Invalid transferredAmount: Insufficient Balance"));
+
+
+    assert.end();
+
+
+    teardown();
+  });
+
+  t.test('channel component test: direct transfer should not handleTransfer with invalid locksroot',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(120);
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var directTransfer = createDirectTransfer(msgID,1,transferredAmount,address,testLocks[0].getMessageHash(),pk_addr[1].address);
+    directTransfer.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,1,address,120,testLocks[0].getMessageHash(),pk_addr[1].address);
+
+    //handle the signed transfer
+    assert.throws(function(){
+      channel.handleTransfer(directTransfer,new util.BN(2));
+    },
+      new Error("Invalid LocksRoot for Transfer"));
+
+
+    assert.end();
+    teardown();
+  });
+
+  t.test('channel component test: direct transfer should not handleTransfer with no signature',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(120);
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var directTransfer = createDirectTransfer(msgID,1,transferredAmount,address,testLocks[0].getMessageHash(),pk_addr[1].address);
+
+    //handle the signed transfer
+    assert.throws(function(){
+      channel.handleTransfer(directTransfer,new util.BN(2));
+    },
+      new Error("Invalid Transfer: unknown from"));
+
+
+    assert.end();
+    teardown();
+  });
+
+
+
+  t.test('channel component test: direct transfer should not handleTransfer with decremented nonce',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(50);
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var directTransfer = createDirectTransfer(msgID,-1,transferredAmount,address,Buffer.alloc(32),pk_addr[1].address);
+    directTransfer.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,-1,address,50,Buffer.alloc(32),pk_addr[1].address);
+
+    //handle the signed transfer
+    assert.throws(function(){
+      channel.handleTransfer(directTransfer,new util.BN(2));
+    },new Error("Invalid nonce: Nonce must be incremented by 1"));
+
+
+    assert.end();
+
+
+    teardown();
+  });
+
+
+  t.test('channel component test: direct transfer should not handleTransfer with nonce > nonce+1',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(50);
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var directTransfer = createDirectTransfer(msgID,2,transferredAmount,address,Buffer.alloc(32),pk_addr[1].address);
+    directTransfer.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,2,address,50,Buffer.alloc(32),pk_addr[1].address);
+
+    //handle the signed transfer
+    assert.throws(function(){
+      channel.handleTransfer(directTransfer,new util.BN(2));
+    },new Error("Invalid nonce: Nonce must be incremented by 1"));
+
+
+    assert.end();
+
+
+    teardown();
+  });
 
   t.test('channel component test: mediated transfer create and handle',function  (assert) {
     setup(assert);
