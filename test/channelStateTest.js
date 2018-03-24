@@ -323,19 +323,23 @@ test('channelState test', function(t){
       lock.expiration,
       lock.secret)});
     var myState = new channelState.ChannelState({depositBalance:new util.BN(123)});
-    myState.pendingLocks = testLocks.splice(0,2);
-
+    myState.pendingLocks = testLocks.slice(0,2);
+    console.log(testLocks);
+    myState.openLocks = [testLocks[2]];
     //all pending locks valid
     assert.equals(myState.lockedAmount(new util.BN(0)).eq(new util.BN(30)),true);
-    assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(30)),true);
     //firt lock expires
     assert.equals(myState.lockedAmount(new util.BN(21)).eq(new util.BN(20)),true);
-    assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(30)),true);
 
     //second lock expires
     assert.equals(myState.lockedAmount(new util.BN(41)).eq(new util.BN(0)),true);
-    assert.equals(myState.unlockedAmount().eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(30)),true);
 
+    //opened locks do not experience expiration
+    assert.equals(myState.lockedAmount(new util.BN(91)).eq(new util.BN(0)),true);
+    assert.equals(myState.unlockedAmount().eq(new util.BN(30)),true);
     assert.end()
   })
   t.test('register transfer to unknown channel',function  (assert) {
