@@ -21,11 +21,11 @@ address: util.toBuffer('0xe2b7c4c2e89438c2889dcf4f5ea935044b2ba2b0')
 
 
 function assertStateBN(assert,state,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount){
-  assert.equals(state.nonce.eq(new util.BN(nonce)),true);
-  assert.equals(state.proof.transferredAmount.eq(new util.BN(transferredAmount)),true);
-  assert.equals(state.lockedAmount().eq(new util.BN(lockedAmount)),true);
-  assert.equals(state.unlockedAmount().eq(new util.BN(unlockedAmount)),true);
-  assert.equals(state.depositBalance.eq(new util.BN(depositBalance)),true);
+  assert.equals(state.nonce.eq(new util.BN(nonce)),true, "correect nonce in state");
+  assert.equals(state.proof.transferredAmount.eq(new util.BN(transferredAmount)),true, "correct transferredAmount in state");
+  assert.equals(state.lockedAmount().eq(new util.BN(lockedAmount)),true, "correct lockedAmount calculated in state");
+  assert.equals(state.unlockedAmount().eq(new util.BN(unlockedAmount)),true, "correct unlockedAmount calculated in state");
+  assert.equals(state.depositBalance.eq(new util.BN(depositBalance)),true, "correct depositBalance in state");
 }
 
 function assertStateProof(assert,state,nonce,transferredAmount,hashLockRoot,channelAddress){
@@ -96,6 +96,36 @@ function computeMerkleTree(lockElements){
   return mt;
 }
 
+function assertProof(assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from){
+  assert.equals(transfer.nonce.eq(message.TO_BN(nonce)),true,"correct nonce in transfer");
+  assert.equals(transfer.transferredAmount.eq(new util.BN(transferredAmount)),true, "correct transferredAmount in transfer");
+  assert.equals(transfer.channelAddress.compare(util.toBuffer(channelAddress)),0,"correct channelAddress in transfer");
+  assert.equals(transfer.locksRoot.compare(util.toBuffer(locksRoot)),0, "correct locksRoot in transfer");
+  if(from){
+      assert.equals(transfer.from.compare(from),0, "correct from recovery in transfer");
+  }
+}
+
+function assertDirectTransfer(assert,directTransfer,from,nonce,channelAddress,transferredAmount,locksRoot,to){
+  assertProof(assert,directTransfer.toProof(),nonce,channelAddress,transferredAmount,locksRoot,from);
+  assert.equals(directTransfer.to.compare(to),0, "correct to set in directTransfer");
+}
+
+function assertChannel(assert,channel,transferrableAtoB,transferrableBtoA,nonceA,nonceB,currentBlock){
+  assert.equals(channel.transferrableFromTo(channel.myState,channel.peerState).eq(message.TO_BN(transferrableAtoB)),true);
+  assert.equals(channel.transferrableFromTo(channel.peerState,channel.myState).eq(message.TO_BN(transferrableBtoA)),true);
+  assert.equals(channel.myState.nonce.eq(message.TO_BN(nonceA)),true);
+  assert.equals(channel.peerState.nonce.eq(message.TO_BN(nonceB)),true);
+
+}
+
+function assertMediatedTransfer(assert,transfer,from,nonce,channelAddress,transferredAmount,locksRoot,to,target){
+  assertProof(assert,transfer.toProof(),nonce,channelAddress,transferredAmount,locksRoot,from);
+  assert.equals(transfer.to.compare(to),0, "correct to set in mediatedtransfer");
+  assert.equals(transfer.target.compare(target),0,"correct target set in mediatedtransfer");
+}
+
+
 function printProof(myState){
 
     console.log("R:"+myState.proof.signature.r.toString('hex'));
@@ -111,78 +141,220 @@ function printProof(myState){
 }
 test('test channel', function(t){
 
-
-
-  t.test('test transferrableFromTo',function (assert) {
-
-     var myState = new channelState.ChannelState({depositBalance:new util.BN(123),
+  function setup(assert){
+      myState = new channelState.ChannelState({depositBalance:new util.BN(123),
       address:pk_addr[0].address
     });
 
-    var peerState = new channelState.ChannelState({depositBalance:new util.BN(200),
+    peerState = new channelState.ChannelState({depositBalance:new util.BN(200),
         address:pk_addr[1].address
       });
 
       //constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock){
-    var channel = new channelLib.Channel(peerState,myState,address,
+    channel = new channelLib.Channel(peerState,myState,address,
         new util.BN(100),
         new util.BN(10),
         10);
-    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState);
-    assert.equals(transferrable.eq(new util.BN(123)),true,'correct transferrable amount from mystate');
-    transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
-    assert.equals(transferrable.eq(new util.BN(200)),true,'correct transferrable amount from peerstate');
-    assert.end();
-  })
-  t.test('channel component test: direct transfer',function  (assert) {
-     var myState = new channelState.ChannelState({depositBalance:new util.BN(123),
-      address:pk_addr[0].address
-    });
 
-    var peerState = new channelState.ChannelState({depositBalance:new util.BN(200),
-        address:pk_addr[1].address
-      });
-
-      //constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock){
-    var channel = new channelLib.Channel(peerState,myState,address,
-        new util.BN(100),
+    peerChannel = new channelLib.Channel(myState,peerState,address, new util.BN(100),
         new util.BN(10),
         10);
+
+    locks=[{secret:util.toBuffer("SECRET1"),amount:10,expiration:20}, //normal
+    {secret:util.toBuffer("SECRET2"),amount:20,expiration:40},//normal
+    {secret:util.toBuffer("SECRET3"),amount:30,expiration:20},//normal
+    {secret:util.toBuffer("SECRET4"),amount:10,expiration:1}, //ok balance bad expiration
+    {secret:util.toBuffer("SECRET5"),amount:1231231230,expiration:10},//more than balance ok expiration
+    {secret:util.toBuffer("SECRET6"),amount:1231231230,expiration:1}];//more then balance bad expiration
+
+    testLocks = locks.map(function(lock){ return createTestLock(lock.amount,
+      lock.expiration,
+      lock.secret)});
+
+    //ENSURE everything was setup properly
+    assert.equals(channel.openedBlock.eq(new util.BN(10)),true);
     assert.equals(myState.address.compare(pk_addr[0].address),0);
     assertStateBN(assert,myState,0,123,0,0,0);
-
     assert.equals(peerState.address.compare(pk_addr[1].address),0);
     assertStateBN(assert,peerState,0,200,0,0,0);
+    assertChannel(assert,channel,123,200,0,0);
+
+  };
+  function teardown(){
+    myState = null;
+    peerState = null;
+    channel = null;
+    locks = null;
+    testLocks = null;
+  };
+
+  t.test('test transferrableFromTo',function (assert) {
+    setup(assert);
+
+    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState,new util.BN(1000));
+    assert.equals(transferrable.eq(new util.BN(123)),true,'correct transferrable amount from mystate');
+    transferrable = channel.transferrableFromTo(channel.peerState,channel.myState,new util.BN(1000));
+    assert.equals(transferrable.eq(new util.BN(200)),true,'correct transferrable amount from peerstate');
+    assert.end();
+    teardown();
+  })
+
+  t.test('channel component test: direct transfer create and handle',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
     var msgID = new util.BN(0);
     var transferredAmount = new util.BN(10);
     var directTransfer = channel.createDirectTransfer(msgID,transferredAmount);
-    assert.equals(directTransfer.to.compare(pk_addr[1].address),0);
-
+    //ensure the state wasnt updated when transfer was created
+    assertStateBN(assert,myState,0,123,0,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
 
     assert.throws(function () {
       directTransfer.from;
-    }, "no signature to recover address from");
+    }, "no signature to recover address from caught correctly");
 
     directTransfer.sign(pk_addr[0].pk);
-    assert.equals(directTransfer.from.compare(pk_addr[0].address),0);
-    console.log(directTransfer);
-    channel.handleTransfer(directTransfer,new util.BN(2));
-    assert.equals(channel.myState.transferredAmount.eq(new util.BN(10)),true);
-    assert.equals(channel.peerState.transferredAmount.eq(new util.BN(0)),true);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,1,address,10,Buffer.alloc(32),pk_addr[1].address);
 
+    //handle the signed transfer
+    channel.handleTransfer(directTransfer,new util.BN(2));
+
+    //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
+    assertStateBN(assert,myState,1,123,10,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
 
     var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState);
-
     assert.equals(transferrable.eq(new util.BN(113)),true,'correct transferrable amount from mystate');
     transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
     console.log(transferrable);
     assert.equals(transferrable.eq(new util.BN(210)),true,'correct transferrable amount from peerstate');
 
+
+    //create a second directTransfer and ensure appropriate update
+    directTransfer = channel.createDirectTransfer(msgID,transferredAmount.add(new util.BN(50)));
+    //ensure the state wasnt updated when transfer was created
+    assertStateBN(assert,myState,1,123,10,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.throws(function () {
+      directTransfer.from;
+    }, "no signature to recover address from caught correctly");
+
+    directTransfer.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,2,address,10+50,Buffer.alloc(32),pk_addr[1].address);
+
+    //handle the signed transfer
+    channel.handleTransfer(directTransfer,new util.BN(2));
+
+    //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
+    assertStateBN(assert,myState,2,123,60,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState);
+    assert.equals(transferrable.eq(new util.BN(63)),true,'correct transferrable amount from mystate');
+    transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
+    console.log(transferrable);
+    assert.equals(transferrable.eq(new util.BN(260)),true,'correct transferrable amount from peerstate');
+
+
+    //send money from peer to myself
+
+    //create a second directTransfer and ensure appropriate update
+    var peerDirectTransfer = peerChannel.createDirectTransfer(msgID,new util.BN(250));
+    //ensure the state wasnt updated when transfer was created
+   assertStateBN(assert,myState,2,123,60,0,0);
+   assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.throws(function () {
+      peerDirectTransfer.from;
+    }, "no signature to recover address from caught correctly");
+
+    //peer sign
+    peerDirectTransfer.sign(pk_addr[1].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,peerDirectTransfer,pk_addr[1].address,1,address,250,Buffer.alloc(32),pk_addr[0].address);
+
+    //handle the peer signed transfer
+    channel.handleTransfer(peerDirectTransfer,new util.BN(2));
+
+    // //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
+    assertStateBN(assert,myState,2,123,60,0,0);
+    assertStateBN(assert,peerState,1,200,250,0,0);
+
+    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState);
+    assert.equals(transferrable.eq(new util.BN(313)),true,'correct transferrable amount from mystate');
+    transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
+    console.log(transferrable);
+    assert.equals(transferrable.eq(new util.BN(10)),true,'correct transferrable amount from peerstate');
+
+
+
+
     assert.end();
+
+
+    teardown();
   })
 
-  // t.test('channel component test: currentBlock expired mediatedtransfer');
-  // t.test('channel component test: closed channel');
-  // t.test('channel component test: settled channel');
+  //Shoul not create transfer  where transferredAmouunt > transferrable
+  //Should not accept transfer balance whose transferredAmount > transferrable
+  //should not accept transfer balance with wrong locksRoot
+  //should not accept unsigned transfer balance
+  //should not accept transfer with decremented nonce
+  //should not accept transfer with nonce > nonce+1
+
+  t.test('channel component test: mediated transfer create and handle',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(11);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+
+    var mediatedtransfer = channel.createMediatedTransfer(msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      currentBlock);
+
+    //ensure the state wasnt updated when transfer was created
+    assertStateBN(assert,myState,0,123,0,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.throws(function () {
+      mediatedtransfer.from;
+    }, "no signature to recover address from caught correctly");
+
+    mediatedtransfer.sign(pk_addr[0].pk);
+
+    //make sure mediated transfer was created properly
+    assertMediatedTransfer(
+      assert,mediatedtransfer,pk_addr[0].address,1,address,0,
+      testLocks[0].getMessageHash(),pk_addr[1].address,pk_addr[1].address);
+
+    //handle the signed transfer
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+
+    //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
+    assertStateBN(assert,myState,1,123,0,10,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState);
+    assert.equals(transferrable.eq(new util.BN(113)),true,'correct transferrable amount from mystate');
+    transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
+    assert.equals(transferrable.eq(new util.BN(200)),true,'correct transferrable amount from peerstate');
+
+    assert.end();
+    teardown();
+  })
+
+  //should not accept locked transfer where expiration < currentBlock - revealTimeout
+  //should not accept locked transfer with different locksRoot
+  //should not accept locked transfer with transferredAmount < state.transferredAmount
+
 
 });
