@@ -8,7 +8,8 @@ CHANNEL_STATE_CLOSED = 'closed'
 CHANNEL_STATE_OPEN = 'opened'
 CHANNEL_STATE_SETTLED = 'settled'
 
-
+SETTLE_TIMEOUT = new util.BN(100);
+REVEAL_TIMEOUT = new util.BN(15);
 
 class Channel{
 
@@ -16,11 +17,14 @@ class Channel{
     this.peerState = peerState; //channelState.ChannelStateSync
     this.myState = myState;//channelState.ChannelStateSync
     this.channelAddress = channelAddress || message.EMPTY_20BYTE_BUFFER;
-    this.openedBlock = currentBlock;
+    this.openedBlock = message.TO_BN(currentBlock);
     this.closedBlock = null;
     this.settledBlock = null;
-    this.SETTLE_TIMEOUT = settleTimeout || new util.BN(100);
-    this.REVEAL_TIMEOUT = revealTimeout || new util.BN(50);
+    this.SETTLE_TIMEOUT = settleTimeout || SETTLE_TIMEOUT;
+    //the minimum amount of time we need from the expiration of a lock to safely unlock
+    //this property should be negotiable by the users based on their level of conservantiveness
+    //in addition to expection of settled locks
+    this.REVEAL_TIMEOUT = revealTimeout || REVEAL_TIMEOUT;
   }
 
 
@@ -121,8 +125,8 @@ class Channel{
 
       //ensure that the lock we are receiving has an expiration time greater then the
       //channel settlement, or else we have a potentially worthless lock :()
-      var expirationBlock = getChannelExpirationBlock(currentBlock);
-      if(lock.expiration.gt(expirationBlock)){
+      var expirationBlock = this.getChannelExpirationBlock(currentBlock);
+      if(lock.expiration.gt(expirationBlock.sub(this.REVEAL_TIMEOUT))){
         throw new Error("Invalid Lock Expiration: Lock expiration must be less than SETTLE_TIMEOUT");
       }
 
@@ -136,7 +140,7 @@ class Channel{
     }
 
     //validate transferredAmount
-    if(proof.transferredAmount.lte(from.transferredAmount)){
+    if(proof.transferredAmount.lt(from.transferredAmount)){
       throw new Error("Invalid transferredAmount: must be monotonically increasing value");
     }
 
@@ -169,9 +173,9 @@ class Channel{
   }
 
   //expirationBlock is the absolute blockNumber when the lock expires
-  createLockedTransfer(msgID,hashLock,amount,expirationBlock){
-    var transferrable = this.transferrableFromTo(this.myState,this.peerState);
-    if(amount.lte(new util.BN(0)) || transferrable.gt(amount)){
+  createLockedTransfer(msgID,hashLock,amount,expirationBlock,currentBlock){
+    var transferrable = this.transferrableFromTo(this.myState,this.peerState,currentBlock);
+    if(amount.lte(new util.BN(0)) || transferrable.lt(amount)){
       throw new Error("Insufficient funds: lock amount must be less than or equal to transferrable amount");
     }
 
