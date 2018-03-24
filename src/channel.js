@@ -136,7 +136,7 @@ class Channel{
         throw new Error("Invalid LocksRoot for SecretToProof");
       }
     }else if(from.merkleTree.getRoot().compare(proof.locksRoot) !==0){
-      throw new Error("Invalid LocksRoot for SecretToProof");
+      throw new Error("Invalid LocksRoot for Transfer");
     }
 
     //validate transferredAmount
@@ -153,7 +153,7 @@ class Channel{
 
     var transferrable = this.transferrableFromTo(from,to,currentBlock);
     if(proof.transferredAmount.gt(transferrable)){
-      throw new Error("Invalid transferredAmountL Insufficient Balance");
+      throw new Error("Invalid transferredAmount: Insufficient Balance");
     }
 
     if(transfer instanceof message.LockedTransfer){
