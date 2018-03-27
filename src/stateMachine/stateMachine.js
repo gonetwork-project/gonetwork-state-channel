@@ -102,10 +102,22 @@ const Target = new machina.BehavioralFsm( {
 
         init:{
           //mediated transfer state is a mediated transfer along with the secret
-          _onEnter:function (state) {
+          "*":function (state) {
             //TODO: check if the lock expiration make sense here?
             this.emit('sendSecretRequest',state);
-            console.log("Send RequestSecret message to initiator:"+state.initiator.toString('hex'));
+
+            //BIG TODO: see if its safe to wait or dont request the secret
+            //and let the lock expire by itself
+            //we cant reject a lockedtransfer, it will put our locksroot out of sync
+            //instead we require silent fails
+            if(true || state.lock.expiration.gt(currentBlock)){
+              console.log("Send RequestSecret message to initiator:"+state.initiator.toString('hex'));
+              this.transition(state,"awaitRevealSecret");
+            }else{
+              this.transition(state, "failedTransfer");
+            }
+
+
           },
           "*":"awaitRevealSecret",
           _onExit:function (state) {
@@ -140,6 +152,9 @@ const Target = new machina.BehavioralFsm( {
           }
         },
         completedTransfer:{
+
+        },
+        failedTransfer:{
 
         }
 
