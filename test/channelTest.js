@@ -51,12 +51,13 @@ function createTestLock(amount,expiration,secret){
   })
 }
 
-function createMediatedTransfer(msgID,nonce,transferredAmount,channelAddress,locksRoot,to,target,initiator,lock){
+function createMediatedTransfer(msgID,nonce,transferredAmount,channelAddress,locksRoot,to,target,initiator,lock,expiration){
   return new message.MediatedTransfer({msgID:new util.BN(msgID),nonce:new util.BN(nonce),
     transferredAmount:new util.BN(transferredAmount),
     channelAddress:util.toBuffer(channelAddress),locksRoot:util.toBuffer(locksRoot),
     to:util.toBuffer(to),target:util.toBuffer(target),initiator:util.toBuffer(initiator),
-    lock:lock});
+    lock:lock,
+    expiration:expiration});
 
 }
 
@@ -476,7 +477,12 @@ test('test channel', function(t){
 
   t.test('channel component test: mediated transfer create and handle',function  (assert) {
     setup(assert);
-    currentBlock = new util.BN(11);
+    //NOTE: at a minimum the locks must be CURRENT_BLOCK+REVEAL_TIMEOUT in the future.
+    //We are better off creating Locks with expiration set to currentBlock + settleTimeout and
+    //not issuing the secret
+
+    //revealTimeout = 10
+    currentBlock = new util.BN(10);
     //create direct transfer from channel
     var msgID = new util.BN(0);
     var transferredAmount = new util.BN(10);
@@ -523,8 +529,8 @@ test('test channel', function(t){
     // console.log(channel.myState.pendingLocks);
     // console.log(util.sha3(locks[0].secret));
 
-
     var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
+
     channel.handleRevealSecret(secretReveal);
     assert.equals(myState.containsLock(testLocks[0]),true);
     assertStateBN(assert,myState,1,123,0,0,10);
@@ -542,9 +548,116 @@ test('test channel', function(t){
     teardown();
   })
 
-  //should not accept locked transfer where expiration < currentBlock - revealTimeout
+
   //should not accept locked transfer with different locksRoot
+  t.test('channel component test: mediatedTransfer should not accept with different locksRoot ',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(11);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+
+    //revealTimeout = 10;
+    //settleTimeout = 100;
+
+    var testMT = computeMerkleTree(testLocks.slice(0,1));
+    var invalidLocksRoot = createMediatedTransfer(1,1,50,address,testLocks[0].getMessageHash(),address,
+      address,address,testLocks[1]);
+    invalidLocksRoot.sign(pk_addr[0].pk);
+
+    try{
+      channel.handleTransfer(invalidLocksRoot,currentBlock);
+    }catch(err){
+      assert.equals(err.message, "Invalid LocksRoot for LockedTransfer");
+    }
+    assertStateBN(assert,myState,0,123,0,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+
+
+
+    assert.end();
+    teardown();
+  })
+
+
   //should not accept locked transfer with transferredAmount < state.transferredAmount
+  t.test('channel component test: mediatedTransfer should not accept with less transferredAmount ',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(11);
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+
+    var testMT = computeMerkleTree(testLocks.slice(0,1));
+    myState.proof.transferredAmount = new util.BN(1000);
+    assertStateBN(assert,myState,0,123,1000,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    var invalidTransferredAmount = createMediatedTransfer(1,1,50,address,testLocks[0].getMessageHash(),address,
+      address,address,testLocks[0]);
+    invalidTransferredAmount.sign(pk_addr[0].pk);
+
+    try{
+      channel.handleTransfer(invalidTransferredAmount,currentBlock);
+    }catch(err){
+      assert.equals(err.message, "Invalid transferredAmount: must be monotonically increasing value");
+    }
+    assertStateBN(assert,myState,0,123,1000,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+
+
+
+    assert.end();
+    teardown();
+  })
+
+  //should not accept unknown signed secretToProof
+  t.test('channel component test: mediated transfer create and handle',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(10);
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //SETUP Phoney State
+    var openLocks = {};
+    openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
+    openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
+
+    var testMT = computeMerkleTree(testLocks.slice(0,2));
+    myState.proof = {
+      nonce:new util.BN(17),
+
+      transferredAmount:new util.BN(0),
+
+      locksRoot :testMT.getRoot()
+    };
+    myState.depositBalance= new util.BN(2313),
+    myState.openLocks = openLocks;
+    myState.merkleTree = testMT;
+
+
+    assertStateBN(assert,myState,17,2313,0,0,30);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    //generate a secret to proof message but dont sign properly
+    var secretToProof = channel.createSecretToProof(msgID,locks[0].secret);
+    secretToProof.sign(pk_addr[2].pk);
+    try{
+      channel.handleTransfer(secretToProof);
+    }catch(err){
+      assert.equals(err.message, "Invalid Transfer: unknown from");
+    }
+
+    //state should not change
+    assertStateBN(assert,myState,17,2313,0,0,30);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.end();
+    teardown();
+  })
+
+  //do not require channel partner signature on reveal secret
 
 
 });
