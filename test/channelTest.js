@@ -119,8 +119,9 @@ function assertChannel(assert,channel,transferrableAtoB,transferrableBtoA,nonceA
 
 }
 
-function assertMediatedTransfer(assert,transfer,from,nonce,channelAddress,transferredAmount,locksRoot,to,target){
+function assertMediatedTransfer(assert,transfer,from,nonce,channelAddress,transferredAmount,locksRoot,to,target,initiator){
   assertProof(assert,transfer.toProof(),nonce,channelAddress,transferredAmount,locksRoot,from);
+  assert.equals(transfer.initiator.compare(initiator),0);
   assert.equals(transfer.to.compare(to),0, "correct to set in mediatedtransfer");
   assert.equals(transfer.target.compare(target),0,"correct target set in mediatedtransfer");
 }
@@ -481,11 +482,13 @@ test('test channel', function(t){
     var transferredAmount = new util.BN(10);
     //(msgID,hashLock,amount,expiration,target)
 
-    var mediatedtransfer = channel.createMediatedTransfer(msgID,
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
       testLocks[0].hashLock,
       testLocks[0].amount,
       testLocks[0].expiration,
       pk_addr[1].address,
+      pk_addr[0].address,
       currentBlock);
 
     //ensure the state wasnt updated when transfer was created
@@ -501,7 +504,7 @@ test('test channel', function(t){
     //make sure mediated transfer was created properly
     assertMediatedTransfer(
       assert,mediatedtransfer,pk_addr[0].address,1,address,0,
-      testLocks[0].getMessageHash(),pk_addr[1].address,pk_addr[1].address);
+      testLocks[0].getMessageHash(),pk_addr[1].address,pk_addr[1].address,pk_addr[0].address);
 
     //handle the signed transfer
     channel.handleTransfer(mediatedtransfer,currentBlock);

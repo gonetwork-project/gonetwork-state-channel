@@ -220,9 +220,14 @@ class Channel{
 
   }
 
-  createMediatedTransfer(msgID,hashLock,amount,expiration,target){
-    var lockedTransfer = this.createLockedTransfer(msgID,hashLock,amount,expiration);
-    var mediatedTransfer = new message.MediatedTransfer(Object.assign({target:target},lockedTransfer));
+  createMediatedTransfer(msgID,hashLock,amount,expiration,target,initiator,currentBlock){
+    var lockedTransfer = this.createLockedTransfer(msgID,hashLock,amount,expiration,currentBlock);
+    var mediatedTransfer = new message.MediatedTransfer(
+      Object.assign(
+        {
+          target:target,
+          initiator:initiator
+    },lockedTransfer));
     return mediatedTransfer;
   }
 
