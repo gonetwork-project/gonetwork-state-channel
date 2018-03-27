@@ -161,7 +161,7 @@ class ChannelState{
         return this.pendingLocks[hashLockKey];
       }
       if(this.openLocks.hasOwnProperty(hashLockKey)){
-        return this.pendingLocks[hashLockKey];
+        return this.openLocks[hashLockKey];
       }
       return null;
     }
