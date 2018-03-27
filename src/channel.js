@@ -55,6 +55,9 @@ class Channel{
   }
 
   handleRevealSecret(revealSecret){
+    if(!revealSecret instanceof message.RevealSecret){
+      throw new Error("Invalid Message: Expected RevealSecret");
+    };
     //TODO: we dont care where it comes from?
     //var from = null;
     // if(this.myState.address.compare(revealSecret.from)===0){
@@ -66,7 +69,7 @@ class Channel{
     // if(!from){throw new Error("Invalid RevealSecret: Unknown secret sent")};
     var myLock = this.myState.getLockFromSecret(revealSecret.secret);
     var peerLock = this.peerState.getLockFromSecret(revealSecret.secret);
-    if(!(myLock && peerLock)){
+    if(!myLock && !peerLock){
       throw new Error("Invalid Secret: Unknown secret revealed");
     }
     if(myLock){
@@ -131,7 +134,13 @@ class Channel{
       }
 
     }else if(transfer instanceof message.SecretToProof){
-      var mtValidate = from._computeMerkleTreeWithoutHashlock(transfer.lock);
+      //TODO: dont try to retreive the lock, just calculate the hash and send in
+      //we do this twice thats why
+      var lock = from.getLockFromSecret(transfer.secret);
+      if(!lock){
+        throw new Error("Invalid SecretToProof: unknown secret");
+      }
+      var mtValidate = from._computeMerkleTreeWithoutHashlock(lock);
       if(mtValidate.getRoot().compare(proof.locksRoot)!==0){
         throw new Error("Invalid LocksRoot for SecretToProof");
       }
@@ -244,7 +253,8 @@ class Channel{
       channelAddress: this.channelAddress,
       transferredAmount:transferredAmount,
       to:this.peerState.address,
-      hashLockRoot:mt.getRoot()
+      hashLockRoot:mt.getRoot(),
+      secret:secret
     })
     return secretToProof;
   }
