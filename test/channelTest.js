@@ -517,6 +517,26 @@ test('test channel', function(t){
     assert.equals(transferrable.eq(new util.BN(113)),true,'correct transferrable amount from mystate');
     transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
     assert.equals(transferrable.eq(new util.BN(200)),true,'correct transferrable amount from peerstate');
+    assert.equals(myState.containsLock(testLocks[0]),true);
+
+
+    // console.log(channel.myState.pendingLocks);
+    // console.log(util.sha3(locks[0].secret));
+
+
+    var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
+    channel.handleRevealSecret(secretReveal);
+    assert.equals(myState.containsLock(testLocks[0]),true);
+    assertStateBN(assert,myState,1,123,0,0,10);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+
+
+    var secretToProof = channel.createSecretToProof(msgID,locks[0].secret);
+    secretToProof.sign(pk_addr[0].pk);
+    channel.handleTransfer(secretToProof);
+    assertStateBN(assert,myState,2,123,10,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
 
     assert.end();
     teardown();
