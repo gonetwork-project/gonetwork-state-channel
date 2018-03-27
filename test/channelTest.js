@@ -560,10 +560,30 @@ test('test channel', function(t){
 
     //revealTimeout = 10;
     //settleTimeout = 100;
+    var testMT = computeMerkleTree(testLocks.slice(0,2));
+    var invalidLocksRoot = computeMerkleTree(testLocks.slice(1,1));
 
-    var testMT = computeMerkleTree(testLocks.slice(0,1));
-    var invalidLocksRoot = createMediatedTransfer(1,1,50,address,testLocks[0].getMessageHash(),address,
-      address,address,testLocks[1]);
+    var openLocks = {};
+    openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
+    openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
+
+    myState.proof = {
+      nonce:new util.BN(17),
+
+      transferredAmount:new util.BN(0),
+
+      locksRoot :testMT.getRoot()
+    };
+    myState.depositBalance= new util.BN(2313),
+    myState.openLocks = openLocks;
+    myState.merkleTree = testMT;
+
+
+    assertStateBN(assert,myState,17,2313,0,0,30);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    var invalidLocksRoot = createMediatedTransfer(1,18,50,address,invalidLocksRoot.getRoot(),address,
+      address,address,testLocks[2]);
     invalidLocksRoot.sign(pk_addr[0].pk);
 
     try{
@@ -571,11 +591,180 @@ test('test channel', function(t){
     }catch(err){
       assert.equals(err.message, "Invalid LocksRoot for LockedTransfer");
     }
-    assertStateBN(assert,myState,0,123,0,0,0);
+
+    assertStateBN(assert,myState,17,2313,0,0,30);
     assertStateBN(assert,peerState,0,200,0,0,0);
 
 
 
+
+    assert.end();
+    teardown();
+  })
+
+  //should not accept locked transfer with different locksRoot: zero buffer
+  t.test('channel component test: mediatedTransfer should not accept with zero buffer ',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(11);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+
+    //revealTimeout = 10;
+    //settleTimeout = 100;
+    var testMT = computeMerkleTree(testLocks.slice(0,2));
+    var invalidLocksRoot = computeMerkleTree(testLocks.slice(1,1));
+
+    var openLocks = {};
+    openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
+    openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
+
+    myState.proof = {
+      nonce:new util.BN(17),
+
+      transferredAmount:new util.BN(0),
+
+      locksRoot :testMT.getRoot()
+    };
+    myState.depositBalance= new util.BN(2313),
+    myState.openLocks = openLocks;
+    myState.merkleTree = testMT;
+
+
+    assertStateBN(assert,myState,17,2313,0,0,30);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    var invalidLocksRoot = createMediatedTransfer(1,18,50,address,Buffer.alloc(32),address,
+      address,address,testLocks[2]);
+    invalidLocksRoot.sign(pk_addr[0].pk);
+
+    try{
+      channel.handleTransfer(invalidLocksRoot,currentBlock);
+    }catch(err){
+      assert.equals(err.message, "Invalid LocksRoot for LockedTransfer");
+    }
+
+    assertStateBN(assert,myState,17,2313,0,0,30);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.end();
+    teardown();
+  })
+
+  t.test('channel component test: mediatedTransfer cannot register same lock twice; both in pending',function  (assert) {
+    setup(assert);
+    setup(assert);
+    //NOTE: at a minimum the locks must be CURRENT_BLOCK+REVEAL_TIMEOUT in the future.
+    //We are better off creating Locks with expiration set to currentBlock + settleTimeout and
+    //not issuing the secret
+
+    //revealTimeout = 10
+    currentBlock = new util.BN(10);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+
+
+
+    //ensure the state wasnt updated when transfer was created
+    assertStateBN(assert,myState,0,123,0,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+
+    mediatedtransfer.sign(pk_addr[0].pk);
+
+
+    //make sure mediated transfer was created properly
+    assertMediatedTransfer(
+      assert,mediatedtransfer,pk_addr[0].address,1,address,0,
+      testLocks[0].getMessageHash(),pk_addr[1].address,pk_addr[1].address,pk_addr[0].address);
+
+    //handle the signed transfer
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+
+    //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
+    assertStateBN(assert,myState,1,123,0,10,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    var duplicateTransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+     duplicateTransfer.sign(pk_addr[0].pk);
+    try{
+      channel.handleTransfer(duplicateTransfer,currentBlock.add(new util.BN(10)));
+    }catch(err){
+      assert.equals(err.message, "Invalid Lock: Lock registered previously");
+    }
+    assert.end();
+    teardown();
+  })
+
+  t.test('channel component test: mediatedTransfer cannot register same lock twice; one in openLocks',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(11);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+
+    //revealTimeout = 10;
+    //settleTimeout = 100;
+    var testMT = computeMerkleTree(testLocks.slice(0,2));
+    var invalidLocksRoot = computeMerkleTree(testLocks.slice(1,1));
+
+    var openLocks = {};
+    openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
+    openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
+
+    myState.proof = {
+      nonce:new util.BN(17),
+
+      transferredAmount:new util.BN(0),
+
+      locksRoot :testMT.getRoot()
+    };
+    myState.depositBalance= new util.BN(2313),
+    myState.openLocks = openLocks;
+    myState.merkleTree = testMT;
+
+
+    assertStateBN(assert,myState,17,2313,0,0,30);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+
+    var duplicateTransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+     duplicateTransfer.sign(pk_addr[0].pk);
+    try{
+      channel.handleTransfer(duplicateTransfer,currentBlock.add(new util.BN(10)));
+    }catch(err){
+      assert.equals(err.message, "Invalid Lock: Lock registered previously");
+    }
+
+    assertStateBN(assert,myState,17,2313,0,0,30);
+    assertStateBN(assert,peerState,0,200,0,0,0);
 
     assert.end();
     teardown();
