@@ -362,6 +362,33 @@ test('test channel', function(t){
     teardown();
   });
 
+  t.test('channel component test: direct transfer should not handleTransfer when state !== CHANNEL_STATE_OPEN',function  (assert) {
+    setup(assert);
+
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(40);
+    var transferredAmountFail = new util.BN(30);
+    //(msgID,nonce,transferredAmount,channelAddress,locksRoot,to)
+    var directTransfer = createDirectTransfer(msgID,1,transferredAmount,address,Buffer.alloc(32),pk_addr[1].address);
+    directTransfer.sign(pk_addr[0].pk);
+    //make sure direct transfer was created properly
+    assertDirectTransfer(assert,directTransfer,pk_addr[0].address,1,address,40,Buffer.alloc(32),pk_addr[1].address);
+    channel.closedBlock = new util.BN(1);
+    try{
+      channel.handleTransfer(directTransfer,new util.BN(2));
+    }catch(err){
+      assert.equals(err.message, "Invalid transfer: cannot update a closing channel");
+    }
+    assertStateBN(assert,myState,0,123,0,0,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.end();
+
+
+    teardown();
+  });
+
   t.test('channel component test: direct transfer should not handleTransfer when transferredAmount > transferrable',function  (assert) {
     setup(assert);
 
