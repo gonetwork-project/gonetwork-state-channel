@@ -549,7 +549,6 @@ test('test channel', function(t){
   })
 
 
-  //should not accept locked transfer with different locksRoot
   t.test('channel component test: mediatedTransfer should not accept with different locksRoot ',function  (assert) {
     setup(assert);
     currentBlock = new util.BN(11);
@@ -602,8 +601,7 @@ test('test channel', function(t){
     teardown();
   })
 
-  //should not accept locked transfer with different locksRoot: zero buffer
-  t.test('channel component test: mediatedTransfer should not accept with zero buffer ',function  (assert) {
+  t.test('channel component test: mediatedTransfer should not accept with differing locksRoot; even if set to zero buffer ',function  (assert) {
     setup(assert);
     currentBlock = new util.BN(11);
     //create direct transfer from channel
@@ -770,8 +768,62 @@ test('test channel', function(t){
     teardown();
   })
 
+  t.test('channel component test: mediatedTransfer can handle same secret multiple times',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(11);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
 
-  //should not accept locked transfer with transferredAmount < state.transferredAmount
+    //revealTimeout = 10;
+    //settleTimeout = 100;
+    var testMT = computeMerkleTree(testLocks.slice(0,2));
+    var invalidLocksRoot = computeMerkleTree(testLocks.slice(1,1));
+
+    var pendingLocks = {};
+    pendingLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
+    pendingLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
+
+    myState.proof = {
+      nonce:new util.BN(17),
+
+      transferredAmount:new util.BN(0),
+
+      locksRoot :testMT.getRoot()
+    };
+    myState.depositBalance= new util.BN(2313),
+    myState.pendingLocks = pendingLocks;
+    myState.merkleTree = testMT;
+
+
+    assertStateBN(assert,myState,17,2313,0,30,0);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+
+    var revealSecret = new message.RevealSecret({
+      to:pk_addr[1].address,
+      secret:locks[0].secret});
+    channel.handleRevealSecret(revealSecret);
+
+    assertStateBN(assert,myState,17,2313,0,20,10);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    //send the RevealSecret again and it shouldnt effect the final state
+    //For expired locks, the state machine implementation must handle not accepting the secret
+    //if secret2proof is sent for expired lock, it could be fine
+     var revealSecret2 = new message.RevealSecret({
+      to:pk_addr[1].address,
+      secret:locks[0].secret});
+    channel.handleRevealSecret(revealSecret2);
+
+    assertStateBN(assert,myState,17,2313,0,20,10);
+    assertStateBN(assert,peerState,0,200,0,0,0);
+
+    assert.end();
+    teardown();
+  })
+
   t.test('channel component test: mediatedTransfer should not accept with less transferredAmount ',function  (assert) {
     setup(assert);
     currentBlock = new util.BN(11);
@@ -802,8 +854,7 @@ test('test channel', function(t){
     teardown();
   })
 
-  //should not accept unknown signed secretToProof
-  t.test('channel component test: mediated transfer create and handle',function  (assert) {
+  t.test('channel component test: mediated transfer should not accept unknown signed proof',function  (assert) {
     setup(assert);
     currentBlock = new util.BN(10);
     var msgID = new util.BN(0);
