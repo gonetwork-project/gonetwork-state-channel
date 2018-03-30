@@ -20,10 +20,13 @@ address: util.toBuffer('0xe2b7c4c2e89438c2889dcf4f5ea935044b2ba2b0')
 }];
 
 
-function assertStateBN(assert,state,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount){
+function assertStateBN(assert,state,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount,currentBlock){
   assert.equals(state.nonce.eq(new util.BN(nonce)),true, "correect nonce in state");
   assert.equals(state.proof.transferredAmount.eq(new util.BN(transferredAmount)),true, "correct transferredAmount in state");
-  assert.equals(state.lockedAmount().eq(new util.BN(lockedAmount)),true, "correct lockedAmount calculated in state");
+  if(!currentBlock){
+    currentBlock = new util.BN(0);
+  }
+  assert.equals(state.lockedAmount(currentBlock).eq(new util.BN(lockedAmount)),true, "correct lockedAmount calculated in state");
   assert.equals(state.unlockedAmount().eq(new util.BN(unlockedAmount)),true, "correct unlockedAmount calculated in state");
   assert.equals(state.depositBalance.eq(new util.BN(depositBalance)),true, "correct depositBalance in state");
 }
@@ -498,8 +501,8 @@ test('test channel', function(t){
       currentBlock);
 
     //ensure the state wasnt updated when transfer was created
-    assertStateBN(assert,myState,0,123,0,0,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,0,123,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     assert.throws(function () {
       mediatedtransfer.from;
@@ -516,10 +519,10 @@ test('test channel', function(t){
     channel.handleTransfer(mediatedtransfer,currentBlock);
 
     //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
-    assertStateBN(assert,myState,1,123,0,10,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,1,123,0,10,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
-    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState);
+    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState,currentBlock);
     assert.equals(transferrable.eq(new util.BN(113)),true,'correct transferrable amount from mystate');
     transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
     assert.equals(transferrable.eq(new util.BN(200)),true,'correct transferrable amount from peerstate');
@@ -528,21 +531,72 @@ test('test channel', function(t){
 
     // console.log(channel.myState.pendingLocks);
     // console.log(util.sha3(locks[0].secret));
-
+    currentBlock = currentBlock.add(new util.BN(1));
     var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
 
     channel.handleRevealSecret(secretReveal);
     assert.equals(myState.containsLock(testLocks[0]),true);
-    assertStateBN(assert,myState,1,123,0,0,10);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,1,123,0,0,10,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
 
-
+    currentBlock = currentBlock.add(new util.BN(1));
     var secretToProof = channel.createSecretToProof(msgID,locks[0].secret);
     secretToProof.sign(pk_addr[0].pk);
     channel.handleTransfer(secretToProof);
-    assertStateBN(assert,myState,2,123,10,0,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,2,123,10,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    assert.end();
+    teardown();
+  })
+
+t.test('channel component test: mediated transfer should accept expired locks ; even if requests wont be sent for secrets',function  (assert) {
+    setup(assert);
+    //NOTE: at a minimum the locks must be CURRENT_BLOCK+REVEAL_TIMEOUT in the future.
+    //We are better off creating Locks with expiration set to currentBlock + settleTimeout and
+    //not issuing the secret
+
+    //revealTimeout = 15
+    currentBlock = new util.BN(50);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+
+    mediatedtransfer.sign(pk_addr[0].pk);
+
+    //make sure mediated transfer was created properly
+    assertMediatedTransfer(
+      assert,mediatedtransfer,pk_addr[0].address,1,address,0,
+      testLocks[0].getMessageHash(),pk_addr[1].address,pk_addr[1].address,pk_addr[0].address);
+
+    //handle the signed transfer
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+    assert.equals(channel.myState.lockedAmount(currentBlock).eq(new util.BN(0)),true);
+    // //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
+    assertStateBN(assert,myState,1,123,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    //lock is in locksRoot but is expired so not counted towards transferrable
+    assert.equals(channel.myState.merkleTree.getRoot().compare(testLocks[0].getMessageHash()),0);
+
+    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState,currentBlock);
+    assert.equals(transferrable.eq(new util.BN(123)),true,'correct transferrable amount from mystate');
+    transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
+    assert.equals(transferrable.eq(new util.BN(200)),true,'correct transferrable amount from peerstate');
+    assert.equals(myState.containsLock(testLocks[0]),true);
+
+
 
     assert.end();
     teardown();
@@ -578,8 +632,8 @@ test('test channel', function(t){
     myState.merkleTree = testMT;
 
 
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     var invalidLocksRoot = createMediatedTransfer(1,18,50,address,invalidLocksRoot.getRoot(),address,
       address,address,testLocks[2]);
@@ -591,8 +645,8 @@ test('test channel', function(t){
       assert.equals(err.message, "Invalid LocksRoot for LockedTransfer");
     }
 
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
 
 
@@ -630,8 +684,8 @@ test('test channel', function(t){
     myState.merkleTree = testMT;
 
 
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     var invalidLocksRoot = createMediatedTransfer(1,18,50,address,Buffer.alloc(32),address,
       address,address,testLocks[2]);
@@ -643,8 +697,8 @@ test('test channel', function(t){
       assert.equals(err.message, "Invalid LocksRoot for LockedTransfer");
     }
 
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     assert.end();
     teardown();
@@ -676,8 +730,8 @@ test('test channel', function(t){
 
 
     //ensure the state wasnt updated when transfer was created
-    assertStateBN(assert,myState,0,123,0,0,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,0,123,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
 
     mediatedtransfer.sign(pk_addr[0].pk);
@@ -692,8 +746,8 @@ test('test channel', function(t){
     channel.handleTransfer(mediatedtransfer,currentBlock);
 
     //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
-    assertStateBN(assert,myState,1,123,0,10,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,1,123,0,10,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     var duplicateTransfer = channel.createMediatedTransfer(
       msgID,
@@ -742,8 +796,8 @@ test('test channel', function(t){
     myState.merkleTree = testMT;
 
 
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
 
     var duplicateTransfer = channel.createMediatedTransfer(
@@ -761,8 +815,8 @@ test('test channel', function(t){
       assert.equals(err.message, "Invalid Lock: Lock registered previously");
     }
 
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     assert.end();
     teardown();
@@ -797,8 +851,8 @@ test('test channel', function(t){
     myState.merkleTree = testMT;
 
 
-    assertStateBN(assert,myState,17,2313,0,30,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,30,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
 
     var revealSecret = new message.RevealSecret({
@@ -817,8 +871,8 @@ test('test channel', function(t){
       secret:locks[0].secret});
     channel.handleRevealSecret(revealSecret2);
 
-    assertStateBN(assert,myState,17,2313,0,20,10);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,20,10,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     assert.end();
     teardown();
@@ -832,8 +886,8 @@ test('test channel', function(t){
 
     var testMT = computeMerkleTree(testLocks.slice(0,1));
     myState.proof.transferredAmount = new util.BN(1000);
-    assertStateBN(assert,myState,0,123,1000,0,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,0,123,1000,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     var invalidTransferredAmount = createMediatedTransfer(1,1,50,address,testLocks[0].getMessageHash(),address,
       address,address,testLocks[0]);
@@ -844,8 +898,8 @@ test('test channel', function(t){
     }catch(err){
       assert.equals(err.message, "Invalid transferredAmount: must be monotonically increasing value");
     }
-    assertStateBN(assert,myState,0,123,1000,0,0);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,0,123,1000,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
 
 
@@ -877,8 +931,8 @@ test('test channel', function(t){
     myState.merkleTree = testMT;
 
 
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     //generate a secret to proof message but dont sign properly
     var secretToProof = channel.createSecretToProof(msgID,locks[0].secret);
@@ -890,8 +944,8 @@ test('test channel', function(t){
     }
 
     //state should not change
-    assertStateBN(assert,myState,17,2313,0,0,30);
-    assertStateBN(assert,peerState,0,200,0,0,0);
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     assert.end();
     teardown();
