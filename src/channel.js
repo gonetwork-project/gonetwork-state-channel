@@ -129,18 +129,18 @@ class Channel{
         throw new Error("Invalid Lock: Lock amount must be greater than 0");
       }
 
-      //ensure that the lock we are receiving has an expiration time greater then the
-      //channel settlement, or else we have a potentially worthless lock :()
+
 
       //unfortunately we must handle all lock requests because then the state roots will
       //be unsynched.  What we can do instead is if the lock is outside our comfort zone
-      //we simply dont make a RequestSecret to the initiator or forward the mediated transfer
-      //if we are the mediator
-      var expirationBlock = this.getChannelExpirationBlock(currentBlock);
-      //=  currentBlock.add(revealTimeout)<= expirationBlock <= currentBlock.add(SETTLE_TIMEOUT)
-      if(lock.expiration.lt(currentBlock.add(REVEAL_TIMEOUT)) || lock.expiration.gt(expirationBlock)){
-        throw new Error("Invalid Lock Expiration: currentBlock+ this.REVEAL_TIMEOUT < Lock expiration < this.SETTLE_TIMEOUT ");
-      }
+      //we simply dont make a RequestSecret to the initiator.  if we are in a mediated transfer
+      //dont forward message, but alteast the locksRoots are synced
+
+      // var expirationBlock = this.getChannelExpirationBlock(currentBlock);
+      // //=  currentBlock.add(revealTimeout)<= expirationBlock <= currentBlock.add(SETTLE_TIMEOUT)
+      // if(lock.expiration.lt(currentBlock.add(REVEAL_TIMEOUT)) || lock.expiration.gt(expirationBlock)){
+      //   throw new Error("Invalid Lock Expiration: currentBlock+ this.REVEAL_TIMEOUT < Lock expiration < this.SETTLE_TIMEOUT ");
+      // }
 
     }else if(transfer instanceof message.SecretToProof){
       //TODO: dont try to retreive the lock, just calculate the hash and send in
