@@ -86,7 +86,7 @@ class Channel{
 
   handleTransfer(transfer,currentBlock){
     //check the direction of data flow
-    if(this.state !== CHANNEL_STATE_OPEN){
+    if(this.updatedProof){
       throw new Error("Invalid transfer: cannot update a closing channel");
     }
     if(this.myState.address.compare(transfer.from) ==0){

@@ -374,7 +374,7 @@ test('test channel', function(t){
     directTransfer.sign(pk_addr[0].pk);
     //make sure direct transfer was created properly
     assertDirectTransfer(assert,directTransfer,pk_addr[0].address,1,address,40,Buffer.alloc(32),pk_addr[1].address);
-    channel.closedBlock = new util.BN(1);
+    channel.updatedProof = true;
     try{
       channel.handleTransfer(directTransfer,new util.BN(2));
     }catch(err){
