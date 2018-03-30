@@ -481,8 +481,8 @@ test('test channel', function(t){
     //We are better off creating Locks with expiration set to currentBlock + settleTimeout and
     //not issuing the secret
 
-    //revealTimeout = 10
-    currentBlock = new util.BN(10);
+    //revealTimeout = 15
+    currentBlock = new util.BN(5);
     //create direct transfer from channel
     var msgID = new util.BN(0);
     var transferredAmount = new util.BN(10);
@@ -658,7 +658,7 @@ test('test channel', function(t){
     //not issuing the secret
 
     //revealTimeout = 10
-    currentBlock = new util.BN(10);
+    currentBlock = new util.BN(5);
     //create direct transfer from channel
     var msgID = new util.BN(0);
     var transferredAmount = new util.BN(10);
@@ -826,7 +826,7 @@ test('test channel', function(t){
 
   t.test('channel component test: mediatedTransfer should not accept with less transferredAmount ',function  (assert) {
     setup(assert);
-    currentBlock = new util.BN(11);
+    currentBlock = new util.BN(5);
     var msgID = new util.BN(0);
     var transferredAmount = new util.BN(10);
 
