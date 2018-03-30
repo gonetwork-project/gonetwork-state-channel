@@ -17,7 +17,7 @@ class LockWithSecret extends message.Lock{
 //on the endstate.  The Ch
 class ChannelState{
   constructor(options){
-    this.proof = options.proof ||new message.ProofMessage({});
+    this.proof = options.proof || new message.ProofMessage({});
     //dictionary of locks ordered by hashLock key
     this.pendingLocks = {};
     this.openLocks = {};
@@ -224,7 +224,7 @@ class ChannelState{
 
     generateLockProof(lock){
      var lockProof = this.merkleTree.generateProof(lock.getMessageHash());
-     verified = merkletree.checkMerkleProof(lockProof,this.merkleTree.getRoot(),lock.hashLock);
+     verified = merkletree.checkMerkleProof(lockProof,this.merkleTree.getRoot(),lock.getMessageHash());
      if(!verified){
       throw new Error("Error creating lock proof");
      }
