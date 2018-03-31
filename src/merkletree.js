@@ -173,7 +173,7 @@ MerkleTree.prototype.findElement = function(hashedElement){
 }
 
 MerkleTree.prototype.verify = function(proof,hashedElement){
-  return checkProof(proof,this.getRoot(), hashedElement, this.ordered);
+  return checkMerkleProof(proof,this.getRoot(), hashedElement, this.ordered);
 }
 
 //=========================== GLOBAL Proof Functions ==========================//
