@@ -39,8 +39,8 @@ function assertState(assert,state,expectedState){
    assert.equal(state.__machina__['mediated-transfer'].state, expectedState);
 }
 test('test stateMachine transfers', function(t){
-
-  var pk_addr = [{pk:util.toBuffer('0xa63c8dec79b2c168b8b76f131df6b14a5e0a1ab0310e0ba652f39bca158884ba'),
+  function setup(assert){
+       pk_addr = [{pk:util.toBuffer('0xa63c8dec79b2c168b8b76f131df6b14a5e0a1ab0310e0ba652f39bca158884ba'),
     address: util.toBuffer('0x6877cf5f9af67d622d6c665ea473e0b1a14f99d0')},
     {pk:util.toBuffer('0x6f1cc905d0a87054c15f183eae89ccc8dc3a79702fdbb47ae337583d22df1a51'),
     address: util.toBuffer('0x43068d574694419cb76360de33fbd177ecd9d3c6')
@@ -48,13 +48,12 @@ test('test stateMachine transfers', function(t){
     {pk:util.toBuffer('0x8dffbd99f8a386c18922a014b5356344a4ac1dbcfe32ee285c3b23239caad10d'),
     address: util.toBuffer('0xe2b7c4c2e89438c2889dcf4f5ea935044b2ba2b0')
     }];
-  t.test('test full state machine lifecyle between initiator and target',function  (assert) {
 
-    var initiatorEvents = [];
-    var targetEvents = [];
-    var serialEvents = [];
+     initiatorEvents = [];
+    targetEvents = [];
+    serialEvents = [];
 
-    function assertEmit(event){
+    assertEmit = function(event){
       assert.equal(serialEvents[serialEvents.length-1],event,true);
     };
 
@@ -75,11 +74,11 @@ test('test stateMachine transfers', function(t){
 
 
     //create a mediated transfer state object
-    var secret = "SECRET";
-    var currentBlock = new util.BN(1231231);
-    var initiator = pk_addr[0];
-    var target = pk_addr[1];
-    var mediatedTransferState = Object.assign({secret:secret},createMediatedTransfer(new util.BN(123),
+     secret = "SECRET";
+     currentBlock = new util.BN(1231231);
+     initiator = pk_addr[0];
+     target = pk_addr[1];
+     mediatedTransferState = Object.assign({secret:secret},createMediatedTransfer(new util.BN(123),
       new util.BN(10),
       new util.BN(0),
       address,
@@ -92,6 +91,13 @@ test('test stateMachine transfers', function(t){
         expiration:currentBlock.add(channel.SETTLE_TIMEOUT),
         hashLock:util.sha3(secret)
       }));
+
+  }
+
+
+  t.test('test full state machine lifecyle between initiator and target',function  (assert) {
+
+    setup(assert);
 
 
     stateMachine.Initiator.handle(mediatedTransferState,'init');
@@ -161,16 +167,71 @@ test('test stateMachine transfers', function(t){
 
     assert.end();
     // body...
-  })
+  });
 
-  t.test('different messages do not interfere with states',function (assert) {
+  t.test('initiator: invalid secret request should not move state ahead',function(assert){
+    setup(assert);
+
+    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    assertState(assert,mediatedTransferState, 'awaitRequestSecret');
+    assertEmit('GOT.sendMediatedTransfer');
+    //send a mediated transfer
+
+    var mediatedTransfer = new message.MediatedTransfer(initiatorEvents[initiatorEvents.length-1].client);
+    mediatedTransfer.sign(initiator.pk);
+    var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
+
+    stateMachine.Target.handle(receivedMT,'init',currentBlock);
+    assertState(assert,receivedMT,'awaitRevealSecret');
+    assertEmit('GOT.sendRequestSecret');
+
+    //invalid hashLock
+    var requestSecret =  new message.RequestSecret({to:targetEvents[targetEvents.length-1].client.from,
+      msgID: targetEvents[targetEvents.length-1].client.msgID,
+      hashLock:util.sha3("SECRET2"),
+      amount:targetEvents[targetEvents.length-1].client.lock.amount});
+    requestSecret.sign(target.pk);
+
+    var receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
+    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    assertState(assert,mediatedTransferState, 'awaitRequestSecret');
+
+    // //invalid amount
+    // requestSecret =  new message.RequestSecret({to:targetEvents[targetEvents.length-1].client.from,
+    //   msgID: targetEvents[targetEvents.length-1].client.msgID,
+    //   hashLock:targetEvents[targetEvents.length-1].client.lock.hashLock,
+    //   amount:new util.BN(123123123123)});
+    // requestSecret.sign(target.pk);
+
+    // receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
+    // stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    // assertState(assert,mediatedTransferState, 'awaitRequestSecret');
+
+    //invalid msgID
+    requestSecret =  new message.RequestSecret({to:targetEvents[targetEvents.length-1].client.from,
+      msgID: new util.BN(3),
+      hashLock:targetEvents[targetEvents.length-1].client.lock.hashLock,
+      amount:targetEvents[targetEvents.length-1].client.lock.amount});
+    requestSecret.sign(target.pk);
+    receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
+    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    assertState(assert,mediatedTransferState, 'awaitRequestSecret');
+
+    //invalid signature
+    requestSecret =  new message.RequestSecret({to:targetEvents[targetEvents.length-1].client.from,
+      msgID: targetEvents[targetEvents.length-1].client.msgID,
+      hashLock:targetEvents[targetEvents.length-1].client.lock.hashLock,
+      amount:targetEvents[targetEvents.length-1].client.lock.amount});
+    requestSecret.sign(pk_addr[2].pk);
+    receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
+    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    assertState(assert,mediatedTransferState, 'awaitRequestSecret');
+
+
     assert.end();
-  })
+  });
 
-
-  t.test('initiator: invalid secret request should not move state ahead');
-
-  t.test('target: invalid secret reveal from Initiator should not move state ahead')
+  t.test('target: invalid secret reveal from Initiator should not move state ahead');
 
   t.test('initiator: invalid  secret reveal from Target should keep same state');
 
