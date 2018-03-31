@@ -74,6 +74,10 @@ class SignedMessage{
     return this._recoverAddress();
   }
 
+  isSigned(){
+    return this.signature === null;
+  }
+
 }
 
 //Messages that encapsulate an on chain proof extend ProofMessage base class
