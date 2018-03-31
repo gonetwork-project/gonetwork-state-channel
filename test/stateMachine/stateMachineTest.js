@@ -623,7 +623,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,4,true);
     assert.end();
-    // body...
+
   });
 
   t.test('target: handleBlock during awaitSecretToProof causing timeout should initiate a close channel and move to completedTransfer',function  (assert) {
@@ -683,12 +683,8 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
     assertEmit('GOT.closeChannel');
     assert.equals(serialEvents.length,5,true);
     assert.end();
-    // body...
+
   });
 
-
-
-
-  //secret reveal from non-partner node
 
 });
