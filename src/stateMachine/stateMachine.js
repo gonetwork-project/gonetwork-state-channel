@@ -56,7 +56,7 @@ const Initiator = new machina.BehavioralFsm( {
             receiveRequestSecret: function( state, requestSecret ) {
                 //we dont care if you request the secret after expiration
                 //this also means we can NEVER reuse a secret
-                console.log("HERE");
+
                 if(state.target.compare(requestSecret.from)===0 &&
                   state.lock.hashLock.compare(requestSecret.hashLock)===0 &&
                   state.msgID.eq(requestSecret.msgID))
@@ -143,7 +143,7 @@ const Target = new machina.BehavioralFsm( {
             },
             receiveRevealSecret:function(state,revealSecret){
                 //reveal secret can come from anywhere including the blockchain
-                console.log(arguments)
+
                 if(state.lock.hashLock.compare(util.sha3(revealSecret.secret))===0 &&
                   state.initiator.compare(revealSecret.from)===0){
                     //in memory "states" object on the target and initator statemachines are now synced
