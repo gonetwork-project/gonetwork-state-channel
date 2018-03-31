@@ -1,5 +1,7 @@
 const machina = require('machina');
 const message = require('../message');
+const channel = require('../channel');
+const util = require('ethereumjs-util');
 
 //State change can only occur after a mutating action has taken place upstream
 //the transitions merely emit further actions.
@@ -12,13 +14,24 @@ function validSecret(state,requestSecret){
 function validRevealSecret(state,revealSecret){
 
 }
+class MediatedTransferState extends message.MediatedTransfer{
+  constructor(options){
+    super(options);
+    this.secret;
+    this.hash;
+  }
 
+  toRevealSecret(){
+
+  }
+
+}
 
 const Initiator = new machina.BehavioralFsm( {
 
-    initialize: function(eventEmitter) {
-      this.eventEmitter = eventEmitter;
-        // your setup code goes here...
+    initialize: function() {
+      //a shared event emitter between all the state machines
+
     },
 
     namespace: "mediated-transfer",
@@ -29,48 +42,44 @@ const Initiator = new machina.BehavioralFsm( {
 
         init:{
           _onEnter:function (state) {
-
-
           },
-          "*":"awaitRequestSecret",
+          //we have already "sent" and handled the transfer locally, now we await if
+          //our channel partner responds
+          "*":function(state){
+            this.emit("GOT.sendMediatedTransfer",state);
+            this.transition(state,"awaitRequestSecret")
+          },
           _onExit:function () {
-
           }
-
         },
         awaitRequestSecret: {
             receiveRequestSecret: function( state, requestSecret ) {
-                //this.deferUntilTransition();
-
+                //we dont care if you request the secret after expiration
+                //this also means we can NEVER reuse a secret
+                console.log("HERE");
                 if(state.target.compare(requestSecret.from)===0 &&
                   state.lock.hashLock.compare(requestSecret.hashLock)===0 &&
-                  state.lock.amount.eq(requestSecret.amount) &&
-                  state.msgID.eq(requestSecret.msgID)){
-                  this.emit("sendSecretRequest",state);
-
-                  this.transition(state,"awaitRevealSecret",requestSecret);
+                  state.msgID.eq(requestSecret.msgID))
+                {
+                  //now you have to assume that money is gone
+                  this.emit("GOT.sendRevealSecret",state);
+                  this.transition(state,"awaitRevealSecret");
                 }
 
             },
 
-            _onExit:function (state)  {
-              console.log("EXIT awaitRequestSecret");
-            }
-
         },
         awaitRevealSecret: {
             _onEnter: function(state) {
-              console.log("ENTERED awaitRevealSecret")
+
             },
             receiveRevealSecret:function(state,secretReveal){
-              console.log("PROCESSING revealSecret")
               //we only unlock if the partner state learned the secret
-              //not just anybody
+              //not just anybody, channel can handle multiple reveals of the same secret
               if(secretReveal.from.compare(state.to)===0
-                && state.lock.hashLock.compare(secretReveal.hashLock)===0){
-                console.log("createS2P(to:state.to)->sign(s2p)->channel[state.to].applySecretToProof(SP),send(S2P)");
-                this.emit("createSecretToProof",state);
-                this.transition(state,"completedTransfer");
+                && state.lock.hashLock.compare(util.sha3(secretReveal.secret))===0){
+                this.emit("GOT.sendSecretToProof",state);
+                this.transition(state, 'completedTransfer');
               }
             },
             _onExit: function(state  ) {
@@ -79,6 +88,12 @@ const Initiator = new machina.BehavioralFsm( {
 
         },
         completedTransfer:{
+
+        },
+        failedTransfer:{
+
+        },
+        expiredTransfer:{
 
         }
 
@@ -101,25 +116,22 @@ const Target = new machina.BehavioralFsm( {
     states: {
 
         init:{
-          //mediated transfer state is a mediated transfer along with the secret
-          "*":function (state) {
-            //TODO: check if the lock expiration make sense here?
-            this.emit('sendSecretRequest',state);
-
-            //BIG TODO: see if its safe to wait or dont request the secret
+          "*":function (state,transition,currentBlock) {
+            //see if its safe to wait or dont request the secret
             //and let the lock expire by itself
             //we cant reject a lockedtransfer, it will put our locksroot out of sync
             //instead we require silent fails
-            if(true || state.lock.expiration.gt(currentBlock)){
-              console.log("Send RequestSecret message to initiator:"+state.initiator.toString('hex'));
+            if(state.lock.expiration.gt(currentBlock.add(channel.REVEAL_TIMEOUT))){
+              console.log("Safe to process lock, lets request it:"+state.initiator.toString('hex'));
+              this.emit("GOT.sendRequestSecret",state)
+              //this.eventEmitter.emit('sendSecretRequest',state,currentBlock,revealTimeout);
               this.transition(state,"awaitRevealSecret");
             }else{
-              this.transition(state, "failedTransfer");
+              this.transition(state, "expiredTransfer");
             }
 
 
           },
-          "*":"awaitRevealSecret",
           _onExit:function (state) {
 
           }
@@ -127,14 +139,26 @@ const Target = new machina.BehavioralFsm( {
         },
         awaitRevealSecret: {
             _onEnter: function(state) {
-              console.log("ENTERED awaitRevealSecret")
+
             },
             receiveRevealSecret:function(state,revealSecret){
-              console.log("PROCESSING revealSecret")
-              //reveal secret can come from anywhere!
-              if(state.lock.hashLock.compare(revealSecret.hashLock)===0){
-                this.emit('sendRevealSecret',state);
-                this.transition(state,"awaitSecretToProof");
+                //reveal secret can come from anywhere including the blockchain
+                console.log(arguments)
+                if(state.lock.hashLock.compare(util.sha3(revealSecret.secret))===0 &&
+                  state.initiator.compare(revealSecret.from)===0){
+                    //in memory "states" object on the target and initator statemachines are now synced
+                    state = Object.assign(state,{secret:revealSecret.secret});
+                    //send this backwards to state.from
+                    this.emit('GOT.sendRevealSecret',state);
+                    this.transition(state,"awaitSecretToProof");
+
+                }
+
+            },
+            handleBlock:function (state,currentBlock) {
+
+              if(state.lock.expiration.gte(currentBlock.add(channel.REVEAL_TIMEOUT))){
+                this.transition(state,"expiredTransfer");
               }
             },
             _onExit: function(state  ) {
@@ -145,16 +169,22 @@ const Target = new machina.BehavioralFsm( {
         awaitSecretToProof:{
           receiveSecretToProof:function(state,secretToProof){
             if(secretToProof.from.compare(state.from)===0){
-              this.emit('receiveSecretToProof',state);
+              this.emit('GOT.receiveSecretToProof',state);
               this.transition(state,"completedTransfer");
             };
 
+          },
+          handleBlock:function (state,currentBlock) {
+            if(state.lock.expiration.gt(currentBlock.add(channel.REVEAL_TIMEOUT))){
+              this.emit('GOT.closeChannel',state.channelAddress);
+              this.transition(state, "completedTransfer");
+            }
           }
         },
         completedTransfer:{
 
         },
-        failedTransfer:{
+        expiredTransfer:{
 
         }
 
