@@ -159,6 +159,12 @@ class Lock extends Hashable{
     return hash;
   }
 
+  encode(){
+    var value = abi.solidityPack(['uint256','uint256','bytes32'],[
+      this.amount, this.expiration, this.hashLock]);
+    return value;
+  }
+
 }
 
 

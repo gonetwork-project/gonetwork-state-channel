@@ -128,4 +128,15 @@ test('test messages', function(t){
 
     assert.end()
   })
+
+  t.test('can encode lock',function (assert) {
+    var lock = new message.Lock({
+      amount:new util.BN(10),
+      expiration:new util.BN(20),
+      hashLock:util.sha3(util.toBuffer("SECRET1"))
+    });
+
+    assert.equals(lock.encode().toString('hex'),"000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000014b8c5926ff513010d19bc9c549d21e8514c5577ef228eff65e3b6bc29a0e25ad2");
+    assert.end();
+  })
 });
