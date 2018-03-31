@@ -121,13 +121,15 @@ const Target = new machina.BehavioralFsm( {
             //and let the lock expire by itself
             //we cant reject a lockedtransfer, it will put our locksroot out of sync
             //instead we require silent fails
-            if(state.lock.expiration.gt(currentBlock.add(channel.REVEAL_TIMEOUT))){
+
+            if(state.lock.expiration.lte(currentBlock.add(channel.REVEAL_TIMEOUT))){
+              this.transition(state, "expiredTransfer");
+            }else{
               console.log("Safe to process lock, lets request it:"+state.initiator.toString('hex'));
               this.emit("GOT.sendRequestSecret",state)
               //this.eventEmitter.emit('sendSecretRequest',state,currentBlock,revealTimeout);
               this.transition(state,"awaitRevealSecret");
-            }else{
-              this.transition(state, "expiredTransfer");
+
             }
 
 
@@ -157,8 +159,10 @@ const Target = new machina.BehavioralFsm( {
             },
             handleBlock:function (state,currentBlock) {
 
-              if(state.lock.expiration.gte(currentBlock.add(channel.REVEAL_TIMEOUT))){
+              if(state.lock.expiration.lte(currentBlock.add(channel.REVEAL_TIMEOUT))){
                 this.transition(state,"expiredTransfer");
+              }else{
+                //not expired
               }
             },
             _onExit: function(state  ) {
@@ -168,14 +172,14 @@ const Target = new machina.BehavioralFsm( {
         },
         awaitSecretToProof:{
           receiveSecretToProof:function(state,secretToProof){
-            if(secretToProof.from.compare(state.from)===0){
+            if(secretToProof.from.compare(state.from)===0){ // this shouldnt happen... the handleTransfer would have errored
               this.emit('GOT.receiveSecretToProof',state);
               this.transition(state,"completedTransfer");
             };
 
           },
           handleBlock:function (state,currentBlock) {
-            if(state.lock.expiration.gt(currentBlock.add(channel.REVEAL_TIMEOUT))){
+            if(state.lock.expiration.lte(currentBlock.add(channel.REVEAL_TIMEOUT))){
               this.emit('GOT.closeChannel',state.channelAddress);
               this.transition(state, "completedTransfer");
             }
