@@ -997,71 +997,390 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
 
   })
 
-  t.test('channel handle lock withdrawals',function  (assert) {
+  // t.test('channel handle lock withdrawals',function  (assert) {
+  //   setup(assert);
+  //   currentBlock = new util.BN(10);
+  //   var msgID = new util.BN(0);
+  //   var transferredAmount = new util.BN(10);
+  //   //SETUP Phoney State
+  //   var openLocks = {};
+  //   openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
+  //   openLocks[testLocks[0].hashLock.toString('hex')].secret  = locks[0].secret;
+  //   openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
+  //   openLocks[testLocks[1].hashLock.toString('hex')].secret  = locks[1].secret;
+
+  //   var testMT = computeMerkleTree(testLocks.slice(0,2));
+  //   myState.proof = {
+  //     nonce:new util.BN(17),
+
+  //     transferredAmount:new util.BN(0),
+
+  //     locksRoot :testMT.getRoot()
+  //   };
+  //   myState.depositBalance= new util.BN(2313),
+  //   myState.openLocks = openLocks;
+  //   myState.merkleTree = testMT;
+
+
+  //   assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+  //   assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+  //   var withdrawLocks = channel._withdrawPeerOpenLocks();
+  //   assert.equals(withdrawLocks.length,0);
+  //   console.log(peerChannel.peerState.openLocks);
+  //   withdrawLocks = peerChannel._withdrawPeerOpenLocks();
+  //   assert.equals(withdrawLocks.length,2);
+
+  //   withdrawLocks.map(function (l) {
+  //     var lock = l[0];
+  //     var proof = l[1];
+  //     console.log("L:"+JSON.stringify(l));
+  //     assert.true(merkleTree.checkMerkleProof(proof,testMT.getRoot(), lock.getMessageHash()));
+  //   })
+
+  //   console.log("// Remix browser has a bunch of issues accepting bytes as input,\r\n"+
+  //   "// but verified that the elementHash + proof element sums to root when\r\n"+
+  //   "// size of proof == 1\r\n"+
+  //   "// function checkElements(string stringHash,string stringEl) public view returns(bytes32){\r\n"+
+  //   "//   bytes32  h = toBytes32(hexStrToBytes(stringHash),0);\r\n"+
+  //   "//   bytes32 el = toBytes32(hexStrToBytes(stringEl),0);\r\n"+
+
+  //   "//   if (h < el) {\r\n"+
+  //   "//         return keccak256(h, el);\r\n"+
+  //   "//     } else {\r\n"+
+  //   "//         return keccak256(el, h);\r\n"+
+  //   "//     }\r\n"+
+  //   "// }\r\n\r\n"+
+  //   "// console.log('encoded lock:'+withdrawLocks[0][0].encode().toString('hex'));\r\n"+
+  //   "// withdrawLocks[0][1].map(function(p){\r\n"+
+  //   "//   console.log('proof:'+p.toString('hex'));\r\n"+
+  //   "// })"+
+  //   "// console.log('root:'+testMT.getRoot().toString('hex'));");
+
+  //   assert.end();
+  //   teardown();
+
+  // });
+
+  t.test('MANUAL TEST: channel can prove lock in solidity',function  (assert) {
     setup(assert);
-    currentBlock = new util.BN(10);
+
+    //revealTimeout = 15
+    currentBlock = new util.BN(5);
+    //create direct transfer from channel
     var msgID = new util.BN(0);
     var transferredAmount = new util.BN(10);
-    //SETUP Phoney State
-    var openLocks = {};
-    openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
-    openLocks[testLocks[0].hashLock.toString('hex')].secret  = locks[0].secret;
-    openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
-    openLocks[testLocks[1].hashLock.toString('hex')].secret  = locks[1].secret;
+    //(msgID,hashLock,amount,expiration,target)
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    assertStateBN(assert,myState,0,123,0,0,0,currentBlock);
 
-    var testMT = computeMerkleTree(testLocks.slice(0,2));
-    myState.proof = {
-      nonce:new util.BN(17),
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+    mediatedtransfer.sign(pk_addr[0].pk);
 
-      transferredAmount:new util.BN(0),
-
-      locksRoot :testMT.getRoot()
-    };
-    myState.depositBalance= new util.BN(2313),
-    myState.openLocks = openLocks;
-    myState.merkleTree = testMT;
-
-
-    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+     assertStateBN(assert,myState,1,123,0,10,0,currentBlock);
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
-    var withdrawLocks = channel._withdrawPeerOpenLocks();
-    assert.equals(withdrawLocks.length,0);
-    console.log(peerChannel.peerState.openLocks);
-    withdrawLocks = peerChannel._withdrawPeerOpenLocks();
-    assert.equals(withdrawLocks.length,2);
+     var mediatedtransfer2 = channel.createMediatedTransfer(
+      msgID.add(new util.BN(1)),
+      testLocks[1].hashLock,
+      testLocks[1].amount,
+      testLocks[1].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+      mediatedtransfer2.sign(pk_addr[0].pk);
+    channel.handleTransfer(mediatedtransfer2,currentBlock);
+     assertStateBN(assert,myState,2,123,0,30,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
-    withdrawLocks.map(function (l) {
-      var lock = l[0];
-      var proof = l[1];
-      console.log("L:"+JSON.stringify(l));
-      assert.true(merkleTree.checkMerkleProof(proof,testMT.getRoot(), lock.getMessageHash()));
-    })
 
-    console.log("// Remix browser has a bunch of issues accepting bytes as input,\r\n"+
-    "// but verified that the elementHash + proof element sums to root when\r\n"+
-    "// size of proof == 1\r\n"+
-    "// function checkElements(string stringHash,string stringEl) public view returns(bytes32){\r\n"+
-    "//   bytes32  h = toBytes32(hexStrToBytes(stringHash),0);\r\n"+
-    "//   bytes32 el = toBytes32(hexStrToBytes(stringEl),0);\r\n"+
+     var mediatedtransfer3 = channel.createMediatedTransfer(
+      msgID.add(new util.BN(1)),
+      testLocks[2].hashLock,
+      testLocks[2].amount,
+      testLocks[2].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+      mediatedtransfer3.sign(pk_addr[0].pk);
+    channel.handleTransfer(mediatedtransfer3,currentBlock);
+     assertStateBN(assert,myState,3,123,0,60,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
-    "//   if (h < el) {\r\n"+
-    "//         return keccak256(h, el);\r\n"+
-    "//     } else {\r\n"+
-    "//         return keccak256(el, h);\r\n"+
-    "//     }\r\n"+
-    "// }\r\n\r\n"+
-    "// console.log('encoded lock:'+withdrawLocks[0][0].encode().toString('hex'));\r\n"+
-    "// withdrawLocks[0][1].map(function(p){\r\n"+
-    "//   console.log('proof:'+p.toString('hex'));\r\n"+
-    "// })"+
-    "// console.log('root:'+testMT.getRoot().toString('hex'));");
+    //recall you must accept expired locks because it may have expired on transit and we would
+    //then have unsynced locksRoots
+     var mediatedtransfer4 = channel.createMediatedTransfer(
+      msgID.add(new util.BN(1)),
+      testLocks[3].hashLock,
+      testLocks[3].amount,
+      testLocks[3].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+      mediatedtransfer4.sign(pk_addr[0].pk);
 
+    channel.handleTransfer(mediatedtransfer4,currentBlock);
+
+    assertStateBN(assert,myState,4,123,0,60,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
+    var secretReveal2 = createRevealSecret(pk_addr[0].address,locks[1].secret);
+    secretReveal.sign(pk_addr[0].pk);
+    secretReveal.sign(pk_addr[0].pk);
+
+    channel.handleRevealSecret(secretReveal);
+    channel.handleRevealSecret(secretReveal2);
+
+    assert.equals(myState.containsLock(testLocks[0]),true);
+    assert.equals(myState.containsLock(testLocks[1]),true);
+    assertStateBN(assert,myState,4,123,0,30,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    console.log(myState.merkleTree.getRoot());
+    currentBlock = currentBlock.add(new util.BN(1));
+    var secretToProof = channel.createSecretToProof(msgID.add(new util.BN(2)),locks[0].secret);
+    secretToProof.sign(pk_addr[0].pk);
+    console.log(secretToProof.toProof());
+    channel.handleTransfer(secretToProof);
+    assertStateBN(assert,myState,5,123,10,30,20,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    assert.equals(peerChannel.isOpen(), true);
+    assert.equals(peerChannel.updatedProof, false);
+
+    console.log(peerChannel._withdrawPeerOpenLocks());
+
+    //Manual Test in Solidity - Lock 1
+    var ll = Object.values(peerChannel.peerState.openLocks)[0];
+    console.log('"0x'+ll.getMessageHash().toString('hex')+'","0x'
+      +peerChannel.peerState.merkleTree.generateProof(ll.getMessageHash())[0].toString('hex')
+      +peerChannel.peerState.merkleTree.generateProof(ll.getMessageHash())[1].toString('hex')+'","0x'+
+     channel.myState.merkleTree.getRoot().toString('hex')+'"');
+
+
+    // MANUAL SOLIDITY TEST FUNCTION: Put above into contract
+  //   function checkElements(string stringHash,string stringEl,string stringRoot) public view returns(bool){
+  //     bytes32  h = toBytes32(hexStrToBytes(stringHash),0);
+  //     bytes32 root = toBytes32(hexStrToBytes(stringRoot),0);
+  //     bytes32 el;
+  //     if(bytes(stringEl).length > 0){
+  //       bytes memory proof =  bytes(hexStrToBytes(stringEl));
+  //       for (uint256 i = 32; i <= proof.length; i += 32) {
+  //          assembly {
+  //           el := mload(add(proof, i))
+  //           }
+  //          if (h < el) {
+
+  //           h = keccak256(h, el);
+  //           } else {
+  //               h = keccak256(el, h);
+  //           }
+  //           }
+  //       }
+  //       return h == root;
+  // }
     assert.end();
-    teardown();
-
   })
-  //do not require channel partner signature on reveal secret
+
+
+  t.test('channel can only close once and correct lockProofs generated against solidity',function  (assert) {
+    setup(assert);
+    var bcReq = [];
+    peerChannel.blockchain = {
+      execute:function (req){
+        bcReq.push(req);
+      }
+    };
+
+    var printProof =function(lock,proof,root){
+      console.log("Encoded Lock:"+util.addHexPrefix(lock.encode().toString('hex')));
+      console.log('"'+util.addHexPrefix(lock.getMessageHash().toString('hex')) +'","'
+        +util.addHexPrefix(proof.reduce(function (result, hashBytes) {
+          result+=hashBytes.toString('hex');
+          return result;
+      },"")) +'","'+util.addHexPrefix(root.toString('hex'))+'"');
+    }
+
+    var assertLockProofString = function(lock,proof,root,stringABIEncodedLock, stringProofHexString,stringRoot){
+      assert.equals(util.addHexPrefix(lock.encode().toString('hex')),stringABIEncodedLock, "correctly solidity encoded lock");
+      assert.equals(util.addHexPrefix(proof.reduce(function (result, hashBytes) {
+          result+=hashBytes.toString('hex');
+          return result;
+      },"")), stringProofHexString, "correct proof string");
+      assert.equal(util.addHexPrefix(root.toString('hex')), stringRoot);
+    };
+    //FURTHER SETUP OF LOCKS ETC.
+
+    //revealTimeout = 15
+    currentBlock = new util.BN(5);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    assertStateBN(assert,myState,0,123,0,0,0,currentBlock);
+
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+    mediatedtransfer.sign(pk_addr[0].pk);
+
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+     assertStateBN(assert,myState,1,123,0,10,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+     var mediatedtransfer2 = channel.createMediatedTransfer(
+      msgID.add(new util.BN(1)),
+      testLocks[1].hashLock,
+      testLocks[1].amount,
+      testLocks[1].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+      mediatedtransfer2.sign(pk_addr[0].pk);
+    channel.handleTransfer(mediatedtransfer2,currentBlock);
+     assertStateBN(assert,myState,2,123,0,30,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
+    var secretReveal2 = createRevealSecret(pk_addr[0].address,locks[1].secret);
+    secretReveal.sign(pk_addr[0].pk);
+    secretReveal2.sign(pk_addr[0].pk);
+
+    channel.handleRevealSecret(secretReveal);
+    channel.handleRevealSecret(secretReveal2);
+
+    assert.equals(myState.containsLock(testLocks[0]),true);
+    assert.equals(myState.containsLock(testLocks[1]),true);
+    assertStateBN(assert,myState,2,123,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    assert.equals(peerChannel.isOpen(), true);
+    assert.equals(peerChannel.updatedProof, false);
+
+    //MAIN PART OF TEST
+    peerChannel.handleClose();
+    var testMT = new merkleTree.MerkleTree(testLocks.slice(0,2).map(function (l)  {
+      return l.getMessageHash();
+    }));
+    testMT.generateHashTree();
+    console.log(bcReq[1]);
+    var expectedLockProofs = [
+    ["0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000014b8c5926ff513010d19bc9c549d21e8514c5577ef228eff65e3b6bc29a0e25ad25345435245543100000000000000000000000000000000000000000000000000",
+    "0x508f0f548b4306ecff5e60b641479a8645cfce137ceddf6e9afe43e38412c31a",
+    "0xd4194160804ec927608381e350dac6adb02f2ee3270ca63b62ccae0e8a990420"],
+    [
+    "0x00000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000028211d5b14c838a5d7ebab63b8e080f1cf529b51b7c58bb4446ae7f24b0edb158e5345435245543200000000000000000000000000000000000000000000000000",
+    "0x0eeee20f167e07ba2f3e0e3c122add49c06ab4f3a8df2a2e3b9e895f07f80e8f",
+    "0xd4194160804ec927608381e350dac6adb02f2ee3270ca63b62ccae0e8a990420"
+    ]];
+    for(var i = 0; i < (bcReq[1][1]).length; i++){
+      var ll = bcReq[1][1][i];
+      console.log(ll);
+      printProof(ll[0],ll[1],testMT.getRoot());
+      assertLockProofString(ll[0],ll[1],testMT.getRoot(),expectedLockProofs[i][0],expectedLockProofs[i][1],expectedLockProofs[i][2]);
+    }
+    //assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from
+    assertProof(assert,bcReq[0][1], new util.BN(2), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
+    assert.equals(peerChannel.isOpen(),true, "channel still open after handleClose as expected until BC confirms");
+    assert.equals(peerChannel.updatedProof, true, "updatedProof set");
+    bcReq =[];
+    peerChannel.handleClose();
+    assert.equals(bcReq.length,0, "no more requests needed to be sent to blockchain");
+    assert.end();
+  })
+
+  t.test('channel can call handleClose again in case of blockChain error',function (assert) {
+   setup(assert);
+    var bcReq = [];
+    peerChannel.blockchain = {
+      execute:function (req){
+        throw new Error("FAKE BLOCKCHIAN ERROR");
+      }
+    };
+    //revealTimeout = 15
+    currentBlock = new util.BN(5);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    assertStateBN(assert,myState,0,123,0,0,0,currentBlock);
+
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+    mediatedtransfer.sign(pk_addr[0].pk);
+
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+     assertStateBN(assert,myState,1,123,0,10,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
+    secretReveal.sign(pk_addr[0].pk);
+
+    channel.handleRevealSecret(secretReveal);
+
+    assert.equals(myState.containsLock(testLocks[0]),true);
+    assertStateBN(assert,myState,1,123,0,0,10,currentBlock);
+
+    assert.equals(peerChannel.isOpen(), true);
+    assert.equals(peerChannel.updatedProof, false);
+
+    //MAIN PART OF TEST
+    try{
+      peerChannel.handleClose();
+    }catch(err){
+      assert.equals(err.message, "FAKE BLOCKCHIAN ERROR");
+      peerChannel.blockchain = {
+        execute:function (req){
+          bcReq.push(req);
+        }
+      };
+
+    }
+    assert.equals(peerChannel.isOpen(), true);
+    assert.equals(peerChannel.updatedProof, false);
+    assert.equals(bcReq.length,0);
+
+    //call again, this time successul
+    peerChannel.handleClose();
+    var testMT = new merkleTree.MerkleTree(testLocks.slice(0,1).map(function (l)  {
+      return l.getMessageHash();
+    }));
+    testMT.generateHashTree();
+    //assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from
+    assertProof(assert,bcReq[0][1], new util.BN(1), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
+    assert.equals(peerChannel.isOpen(),true, "channel still open after handleClose as expected until BC confirms");
+    assert.equals(peerChannel.updatedProof, true, "updatedProof set");
+    bcReq =[];
+    peerChannel.handleClose();
+    assert.equals(bcReq.length,0, "no more requests needed to be sent to blockchain");
+    assert.end();
+  })
 
 
 });
