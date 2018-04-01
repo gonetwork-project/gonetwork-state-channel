@@ -35,8 +35,13 @@ function JSON_REVIVER_FUNC(k,v) {
       return v;
 }
 
+function SERIALIZE(msg){
+  return JSON.stringify(msg);
+}
 
-
+function DESERIALIZE(data){
+  return JSON.parse(data, JSON_REVIVER_FUNC);
+}
 //Messages that merely require signing extend this Base Class
 class SignedMessage{
 
@@ -351,5 +356,5 @@ function GenerateRandomSecretHashPair(){
 module.exports= {
   SignedMessage,ProofMessage,DirectTransfer,LockedTransfer,MediatedTransfer,
   RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC,
-  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN,OpenLock
+  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN,OpenLock,SERIALIZE,DESERIALIZE
 }
