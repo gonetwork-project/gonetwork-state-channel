@@ -308,9 +308,8 @@ class Channel{
       this.blockchain.execute([method,this.peerState.proof]);
       var lockProofs =
       this._withdrawPeerOpenLocks();
-      for(var i=0; i < lockProofs.length; i++){
-        this.blockchain.execute(["WITHDRAW_LOCK",lockProofs[i]]);
-      }
+      this.blockchain.execute(["WITHDRAW_LOCKS",lockProofs]);
+
       this.updatedProof = true;
     }
   }
