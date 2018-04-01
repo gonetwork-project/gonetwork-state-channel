@@ -7,12 +7,7 @@ const abi = require("ethereumjs-abi");
 const message = require('./message');
 
 
-class LockWithSecret extends message.Lock{
-  constructor(lock,secret){
-    super(lock);
-    this.secret = secret;
-  }
-}
+
 //Channel Endpoint state may not be updated directly, you must apply the appropriate message types
 //on the endstate.  The Ch
 class ChannelState{
@@ -83,7 +78,7 @@ class ChannelState{
       //TODO this must be atomic operation, you will have to sanity check on restart
       //if we crash here, we will have the same lock twice...
       pendingLock = this.pendingLocks[hashLockKey];
-      this.openLocks[hashLockKey] = new LockWithSecret(pendingLock,revealSecret.secret);
+      this.openLocks[hashLockKey] = new message.OpenLock(pendingLock,revealSecret.secret);
       delete this.pendingLocks[hashLockKey];
     }
   }
@@ -224,7 +219,7 @@ class ChannelState{
 
     generateLockProof(lock){
      var lockProof = this.merkleTree.generateProof(lock.getMessageHash());
-     verified = merkletree.checkMerkleProof(lockProof,this.merkleTree.getRoot(),lock.getMessageHash());
+     var verified = merkletree.checkMerkleProof(lockProof,this.merkleTree.getRoot(),lock.getMessageHash());
      if(!verified){
       throw new Error("Error creating lock proof");
      }
