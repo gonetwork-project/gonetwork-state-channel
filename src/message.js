@@ -171,6 +171,19 @@ class Lock extends Hashable{
 
 }
 
+class OpenLock extends Lock{
+  constructor(lock,secret){
+    super(lock);
+    this.secret = secret;
+  }
+
+  encode(){
+    var value = abi.solidityPack(['uint256','uint256','bytes32','bytes32'],[
+      this.amount, this.expiration, this.hashLock,this.secret]);
+    return value;
+  }
+}
+
 
 class DirectTransfer extends ProofMessage{
   constructor(options){
@@ -338,5 +351,5 @@ function GenerateRandomSecretHashPair(){
 module.exports= {
   SignedMessage,ProofMessage,DirectTransfer,LockedTransfer,MediatedTransfer,
   RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC,
-  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN
+  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN,OpenLock
 }
