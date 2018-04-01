@@ -978,6 +978,24 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     teardown();
   })
 
+  //Block Chain event tests
+  t.test('channel handles deposit value',function (assert) {
+    setup(assert);
+    assertStateBN(assert,myState, 0,123,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    try{
+      channel.handleDeposit(myState.address, new util.BN(12));
+    }catch(err){
+      assert.equals(err.message, "Invalid Deposit Amount: deposit must be monotonically increasing");
+    }
+    assertStateBN(assert,myState, 0,123,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    channel.handleDeposit(myState.address, new util.BN(129));
+    assertStateBN(assert,myState, 0,129,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    assert.end();
+
+  })
   //do not require channel partner signature on reveal secret
 
 

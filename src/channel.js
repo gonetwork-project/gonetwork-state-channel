@@ -347,7 +347,7 @@ class Channel{
   handleDepositFrom(from, depositAmount){
     //deposit amount must be monotonically increasing
     if(from.depositBalance.lt(depositAmount)){
-      from.depositAmount = depositAmount;
+      from.depositBalance = depositAmount;
     }else{
       throw new Error("Invalid Deposit Amount: deposit must be monotonically increasing");
     }
