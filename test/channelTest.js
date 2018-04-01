@@ -157,12 +157,9 @@ test('test channel', function(t){
 
       //constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock){
     channel = new channelLib.Channel(peerState,myState,address,
-        new util.BN(100),
-        new util.BN(10),
         10);
 
-    peerChannel = new channelLib.Channel(myState,peerState,address, new util.BN(100),
-        new util.BN(10),
+    peerChannel = new channelLib.Channel(myState,peerState,address,
         10);
 
     locks=[{secret:util.toBuffer("SECRET1"),amount:10,expiration:20}, //normal
@@ -979,7 +976,7 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
   })
 
   //Block Chain event tests
-  t.test('channel handles deposit value',function (assert) {
+  t.test('channel handles depositBalance ony when it is greater then previous balance',function (assert) {
     setup(assert);
     assertStateBN(assert,myState, 0,123,0,0,0,currentBlock);
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
@@ -993,9 +990,13 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     channel.handleDeposit(myState.address, new util.BN(129));
     assertStateBN(assert,myState, 0,129,0,0,0,currentBlock);
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    channel.handleDeposit(peerState.address, new util.BN(209));
+    assertStateBN(assert,myState, 0,129,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,209,0,0,0,currentBlock);
     assert.end();
 
   })
+
 
   // t.test('channel handle lock withdrawals',function  (assert) {
   //   setup(assert);
@@ -1196,11 +1197,10 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
   t.test('channel can only close once and correct lockProofs generated against solidity',function  (assert) {
     setup(assert);
     var bcReq = [];
-    peerChannel.blockchain = {
-      execute:function (req){
+    peerChannel.blockchain = function (req){
         bcReq.push(req);
       }
-    };
+
 
     var printProof =function(lock,proof,root){
       console.log("Encoded Lock:"+util.addHexPrefix(lock.encode().toString('hex')));
@@ -1309,10 +1309,9 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
   t.test('channel can call handleClose again in case of blockChain error',function (assert) {
    setup(assert);
     var bcReq = [];
-    peerChannel.blockchain = {
-      execute:function (req){
+    peerChannel.blockchain = function (req){
         throw new Error("FAKE BLOCKCHIAN ERROR");
-      }
+
     };
     //revealTimeout = 15
     currentBlock = new util.BN(5);
@@ -1355,10 +1354,10 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
       peerChannel.handleClose();
     }catch(err){
       assert.equals(err.message, "FAKE BLOCKCHIAN ERROR");
-      peerChannel.blockchain = {
-        execute:function (req){
+      peerChannel.blockchain =
+       function (req){
           bcReq.push(req);
-        }
+
       };
 
     }
