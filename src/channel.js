@@ -161,7 +161,8 @@ class Channel{
       }
       var mtValidate = from._computeMerkleTreeWithoutHashlock(lock);
       if(mtValidate.getRoot().compare(proof.locksRoot)!==0){
-        throw new Error("Invalid LocksRoot for SecretToProof");
+
+        throw new Error("Invalid LocksRoot for SecretToProof:"+mtValidate.getRoot().toString('hex')+"!="+proof.locksRoot.toString('hex'));
       }
     }else if(from.merkleTree.getRoot().compare(proof.locksRoot) !==0){
       throw new Error("Invalid LocksRoot for Transfer");
@@ -269,7 +270,7 @@ class Channel{
       channelAddress: this.channelAddress,
       transferredAmount:transferredAmount,
       to:this.peerState.address,
-      hashLockRoot:mt.getRoot(),
+      locksRoot:mt.getRoot(),
       secret:secret
     })
     return secretToProof;
@@ -292,13 +293,13 @@ class Channel{
 
   //initiate  channel close
   handleClose(){
-    _handleClose("CLOSE_CHANNEL")
+    this._handleClose("CLOSE_CHANNEL")
   }
 
   //respond to channel close from blockchain
   handleClosed(closedBlock){
    this.closeBlock = closedBlock;
-   _handleClose("UPDATE_TRANSFER");
+   this._handleClose("UPDATE_TRANSFER");
   }
 
   _handleClose(method){
