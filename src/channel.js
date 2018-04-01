@@ -16,7 +16,7 @@ REVEAL_TIMEOUT = new util.BN(15);
 
 class Channel{
 
-  constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock){
+  constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock,blockchain){
     this.peerState = peerState; //channelState.ChannelStateSync
     this.myState = myState;//channelState.ChannelStateSync
     this.channelAddress = channelAddress || message.EMPTY_20BYTE_BUFFER;
@@ -26,6 +26,7 @@ class Channel{
 
     this.updatedProof = false;
     this.withdrawnLocks = {};
+    this.blockchain = blockchain;
   }
 
 
@@ -316,14 +317,16 @@ class Channel{
   //withdraw all peerstate locks
   _withdrawPeerOpenLocks(){
     //withdraw all open locks
+    var self = this;
     var lockProofs = Object.values(this.peerState.openLocks).map(function  (lock) {
       try{
-        return [lock,this.peerState.generateLockProof(lock),lock.secret];
+        return [lock,self.peerState.generateLockProof(lock),lock.encode()];
       }catch(err){
         return [err];
       }
       // body...
     })
+    return lockProofs;
   }
 
   handleSettle(currentBlock){

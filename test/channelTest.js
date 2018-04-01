@@ -996,6 +996,71 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     assert.end();
 
   })
+
+  t.test('channel handle lock withdrawals',function  (assert) {
+    setup(assert);
+    currentBlock = new util.BN(10);
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //SETUP Phoney State
+    var openLocks = {};
+    openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
+    openLocks[testLocks[0].hashLock.toString('hex')].secret  = locks[0].secret;
+    openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
+    openLocks[testLocks[1].hashLock.toString('hex')].secret  = locks[1].secret;
+
+    var testMT = computeMerkleTree(testLocks.slice(0,2));
+    myState.proof = {
+      nonce:new util.BN(17),
+
+      transferredAmount:new util.BN(0),
+
+      locksRoot :testMT.getRoot()
+    };
+    myState.depositBalance= new util.BN(2313),
+    myState.openLocks = openLocks;
+    myState.merkleTree = testMT;
+
+
+    assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    var withdrawLocks = channel._withdrawPeerOpenLocks();
+    assert.equals(withdrawLocks.length,0);
+    console.log(peerChannel.peerState.openLocks);
+    withdrawLocks = peerChannel._withdrawPeerOpenLocks();
+    assert.equals(withdrawLocks.length,2);
+
+    withdrawLocks.map(function (l) {
+      var lock = l[0];
+      var proof = l[1];
+      console.log("L:"+JSON.stringify(l));
+      assert.true(merkleTree.checkMerkleProof(proof,testMT.getRoot(), lock.getMessageHash()));
+    })
+
+    console.log("// Remix browser has a bunch of issues accepting bytes as input,\r\n"+
+    "// but verified that the elementHash + proof element sums to root when\r\n"+
+    "// size of proof == 1\r\n"+
+    "// function checkElements(string stringHash,string stringEl) public view returns(bytes32){\r\n"+
+    "//   bytes32  h = toBytes32(hexStrToBytes(stringHash),0);\r\n"+
+    "//   bytes32 el = toBytes32(hexStrToBytes(stringEl),0);\r\n"+
+
+    "//   if (h < el) {\r\n"+
+    "//         return keccak256(h, el);\r\n"+
+    "//     } else {\r\n"+
+    "//         return keccak256(el, h);\r\n"+
+    "//     }\r\n"+
+    "// }\r\n\r\n"+
+    "// console.log('encoded lock:'+withdrawLocks[0][0].encode().toString('hex'));\r\n"+
+    "// withdrawLocks[0][1].map(function(p){\r\n"+
+    "//   console.log('proof:'+p.toString('hex'));\r\n"+
+    "// })"+
+    "// console.log('root:'+testMT.getRoot().toString('hex'));");
+
+    assert.end();
+    teardown();
+
+  })
   //do not require channel partner signature on reveal secret
 
 
