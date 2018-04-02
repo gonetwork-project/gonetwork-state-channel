@@ -42,11 +42,46 @@ function SERIALIZE(msg){
 function DESERIALIZE(data){
   return JSON.parse(data, JSON_REVIVER_FUNC);
 }
+
+function DESERIALIZE_AND_DECODE_MESSAGE(data){
+  var jsonObj = DESERIALIZE(data);
+  if(jsonObj.hasOwnProperty("classType")){
+    switch(jsonObj.classType){
+      case "SignedMessage":
+        return new SignedMessage(jsonObj);
+      case "Proof":
+        return new Proof(jsonObj);
+      case "ProofMessage":
+        return new ProofMessage(jsonObj);
+      case "Lock":
+        return new Lock(jsonObj);
+      case "OpenLock":
+        return new OpenLock(jsonObj);
+      case "DirectTransfer":
+        return new DirectTransfer(jsonObj);
+      case "LockedTransfer":
+        return new LockedTransfer(jsonObj);
+      case "MediatedTransfer":
+        return new MediatedTransfer(jsonObj);
+      case "RequestSecret":
+        return new RequestSecret(jsonObj);
+      case "RevealSecret":
+        return new RevealSecret(jsonObj);
+      case "SecretToProof":
+        return new SecretToProof(jsonObj);
+      case "Ack":
+        return new Ack(jsonObj);
+      default:
+        throw new Error("Invalid Message: unknown classType")
+    }
+  }
+  throw new Error("Invalid Message: not a recoginized GOT message type");
+}
 //Messages that merely require signing extend this Base Class
 class SignedMessage{
 
-
   constructor(options){
+    this.classType = this.constructor.name;
     this.signature = options.signature || null;
   }
   //pack this object for signing
@@ -80,7 +115,7 @@ class SignedMessage{
   }
 
   isSigned(){
-    return this.signature === null;
+    return !(this.signature === null);
   }
 
 }
@@ -88,6 +123,7 @@ class SignedMessage{
 //Messages that encapsulate an on chain proof extend ProofMessage base class
 //A proof message maybe submitted onchain during settlement to allocate your funds
 class Proof extends SignedMessage{
+
   constructor(options){
     super(options);
     this.nonce = TO_BN(options.nonce) || new util.BN(0);
@@ -113,8 +149,10 @@ class Proof extends SignedMessage{
 
 }
 class ProofMessage extends SignedMessage{
+
   constructor(options){
     super(options);
+
     this.nonce = TO_BN(options.nonce) || new util.BN(0);
     this.transferredAmount = TO_BN(options.transferredAmount) || new util.BN(0);
     this.locksRoot = options.locksRoot || EMPTY_32BYTE_BUFFER;
@@ -155,8 +193,10 @@ class ProofMessage extends SignedMessage{
 
 //A lock is included as part of a LockedTransfer message
 class Lock extends Hashable{
+
   constructor(options){
     super(options);
+
     this.amount = TO_BN(options.amount) || new util.BN(0);
     this.expiration= TO_BN(options.expiration) || new util.BN(0);
     this.hashLock = options.hashLock || EMPTY_32BYTE_BUFFER;
@@ -177,6 +217,7 @@ class Lock extends Hashable{
 }
 
 class OpenLock extends Lock{
+
   constructor(lock,secret){
     super(lock);
     this.secret = secret;
@@ -191,8 +232,10 @@ class OpenLock extends Lock{
 
 
 class DirectTransfer extends ProofMessage{
+
   constructor(options){
     super(options);
+
     this.msgID = TO_BN(options.msgID) || new util.BN(0);
     this.to = options.to || EMPTY_20BYTE_BUFFER;
 
@@ -240,6 +283,7 @@ class LockedTransfer extends DirectTransfer{
 }
 
 class MediatedTransfer extends LockedTransfer{
+
   constructor(options){
     super(options);
     this.target = options.target || EMPTY_20BYTE_BUFFER; //EthAddress
@@ -263,6 +307,7 @@ class MediatedTransfer extends LockedTransfer{
 }
 
 class RequestSecret extends SignedMessage{
+
   constructor(options){
     super(options);
     this.msgID = TO_BN(options.msgID) || new util.BN(0);
@@ -281,6 +326,7 @@ class RequestSecret extends SignedMessage{
 }
 
 class RevealSecret extends SignedMessage{
+
   constructor(options){
     super(options);
     this.secret = options.secret || EMPTY_32BYTE_BUFFER;
@@ -304,6 +350,7 @@ class RevealSecret extends SignedMessage{
 //then the min(openLocks.expired) block, then convert the lock into a balance proof
 //using this message.  Without it, we will have to close channel and withdraw on chain
 class SecretToProof extends ProofMessage{
+
   constructor(options){
     super(options);
     this.msgID = TO_BN(options.msgID) || new util.BN(0);
@@ -333,6 +380,7 @@ class SecretToProof extends ProofMessage{
 //Note: We initially avoid signing acks because it basically
 //gives an attacker a valid message signature by the signer (which is not intended)
 class Ack{
+
   constructor(options){
     this.to = options.to || EMPTY_20BYTE_BUFFER;
     this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
@@ -356,5 +404,5 @@ function GenerateRandomSecretHashPair(){
 module.exports= {
   SignedMessage,ProofMessage,DirectTransfer,LockedTransfer,MediatedTransfer,
   RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC,
-  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN,OpenLock,SERIALIZE,DESERIALIZE
+  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN,OpenLock,SERIALIZE,DESERIALIZE,DESERIALIZE_AND_DECODE_MESSAGE
 }
