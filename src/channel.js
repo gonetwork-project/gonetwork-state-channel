@@ -4,9 +4,12 @@ const util = require('ethereumjs-util');
 
 //Transfers apply state mutations to the channel object.  Once a transfer is verified
 //we apply it to the Channel
-CHANNEL_STATE_CLOSED = 'closed'
-CHANNEL_STATE_OPEN = 'opened'
-CHANNEL_STATE_SETTLED = 'settled'
+const CHANNEL_STATE_IS_OPENING = 'opening';
+const CHANNEL_STATE_IS_CLOSING = 'closing';
+const CHANNEL_STATE_IS_SETTLING = 'settling';
+const CHANNEL_STATE_CLOSED = 'closed';
+const CHANNEL_STATE_OPEN = 'opened';
+const CHANNEL_STATE_SETTLED = 'settled';
 
 SETTLE_TIMEOUT = new util.BN(100);
 //the minimum amount of time we need from the expiration of a lock to safely unlock
@@ -21,6 +24,8 @@ class Channel{
     this.myState = myState;//channelState.ChannelStateSync
     this.channelAddress = channelAddress || message.EMPTY_20BYTE_BUFFER;
     this.openedBlock = message.TO_BN(currentBlock);
+    this.issuedCloseBlock = null;
+    this.issuedSettleBlock = null;
     this.closedBlock = null;
     this.settledBlock = null;
     this.updatedProof = false;
@@ -50,7 +55,9 @@ class Channel{
     }
     else if(this.closedBlock){
       return CHANNEL_STATE_CLOSED;
-    }else {
+    }else if(this.issuedCloseBlock){
+      return CHANNEL_STATE_IS_CLOSING;
+    } else {
       return CHANNEL_STATE_OPEN;
     }
   }
@@ -275,9 +282,11 @@ class Channel{
     return secretToProof;
   }
 
-
+  //this function is only used for handling SETTLE
+  //timeouts for locked transfers are handled by the statemachine atm
+  //this will be refactored to make sure code locality
   handleBlock(currentBlock){
-    if(this.state === CHANNEL_STATE_CLOSED &&
+    if(this.closedBlock &&
       this.closedBlock.add(this.SETTLE_TIMEOUT).gte(currentBlock)){
         this.handleSettle(currentBlock);
     }
@@ -291,8 +300,11 @@ class Channel{
 
 
   //initiate  channel close
-  handleClose(){
-    this._handleClose("CLOSE_CHANNEL")
+  handleClose(block){
+    if(!this.issuedCloseBlock){
+      this._handleClose("CLOSE_CHANNEL");
+      this.issuedCloseBlock = block;
+    }
   }
 
   //respond to channel close from blockchain
@@ -303,12 +315,13 @@ class Channel{
 
   _handleClose(method){
     //if we initiated, then handleClosed will just bypass this
-    if(!this.updatedProof && this.peerState.proof.signature){
-      this.blockchain([method,this.peerState.proof]);
-      var lockProofs =
-      this._withdrawPeerOpenLocks();
-      this.blockchain(["WITHDRAW_LOCKS",lockProofs]);
-
+    if(!this.updatedProof){
+      if(this.peerState.proof.signature){
+        this.blockchain([method,this.peerState.proof]);
+        var lockProofs =
+        this._withdrawPeerOpenLocks();
+        this.blockchain(["WITHDRAW_LOCKS",lockProofs]);
+      }
       this.updatedProof = true;
     }
   }
@@ -329,12 +342,14 @@ class Channel{
   }
 
   handleSettle(currentBlock){
-    this.blockchain(["SETTLE",this.channelAddress]);
-    this.settledBlock = currentBlock;
+    if(!this.issuedSettleBlock){
+      this.blockchain(["SETTLE",this.channelAddress]);
+      this.issuedSettleBlock = currentBlock;
+    }
   }
 
-  handleSettled(currentBlock){
-    this.settledBlock = currentBlock;
+  handleSettled(block){
+    this.settledBlock = block;
   }
 
   //Contract logged deposit event
@@ -358,7 +373,8 @@ class Channel{
 }
 
 module.exports = {
-  Channel,SETTLE_TIMEOUT,REVEAL_TIMEOUT
+  Channel,SETTLE_TIMEOUT,REVEAL_TIMEOUT,CHANNEL_STATE_IS_CLOSING,CHANNEL_STATE_IS_SETTLING, CHANNEL_STATE_IS_OPENING,
+  CHANNEL_STATE_OPEN, CHANNEL_STATE_CLOSED, CHANNEL_STATE_SETTLED
 }
 
 // function ChannelManager(){

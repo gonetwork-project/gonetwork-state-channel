@@ -1275,7 +1275,7 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     assert.equals(peerChannel.updatedProof, false);
 
     //MAIN PART OF TEST
-    peerChannel.handleClose();
+    peerChannel.handleClose(currentBlock);
     var testMT = new merkleTree.MerkleTree(testLocks.slice(0,2).map(function (l)  {
       return l.getMessageHash();
     }));
@@ -1298,10 +1298,10 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     }
     //assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from
     assertProof(assert,bcReq[0][1], new util.BN(2), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
-    assert.equals(peerChannel.isOpen(),true, "channel still open after handleClose as expected until BC confirms");
+    assert.equals(peerChannel.isOpen(),false, "channel still open after handleClose as expected until BC confirms");
     assert.equals(peerChannel.updatedProof, true, "updatedProof set");
     bcReq =[];
-    peerChannel.handleClose();
+    peerChannel.handleClose(currentBlock);
     assert.equals(bcReq.length,0, "no more requests needed to be sent to blockchain");
     assert.end();
   })
@@ -1351,7 +1351,7 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
 
     //MAIN PART OF TEST
     try{
-      peerChannel.handleClose();
+      peerChannel.handleClose(currentBlock);
     }catch(err){
       assert.equals(err.message, "FAKE BLOCKCHIAN ERROR");
       peerChannel.blockchain =
@@ -1362,24 +1362,28 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
 
     }
     assert.equals(peerChannel.isOpen(), true);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_OPEN);
     assert.equals(peerChannel.updatedProof, false);
     assert.equals(bcReq.length,0);
 
     //call again, this time successul
-    peerChannel.handleClose();
+    peerChannel.handleClose(currentBlock);
     var testMT = new merkleTree.MerkleTree(testLocks.slice(0,1).map(function (l)  {
       return l.getMessageHash();
     }));
     testMT.generateHashTree();
     //assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from
     assertProof(assert,bcReq[0][1], new util.BN(1), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
-    assert.equals(peerChannel.isOpen(),true, "channel still open after handleClose as expected until BC confirms");
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
+    assert.equals(peerChannel.isOpen(),false, "channel still open after handleClose as expected until BC confirms");
     assert.equals(peerChannel.updatedProof, true, "updatedProof set");
     bcReq =[];
-    peerChannel.handleClose();
+    peerChannel.handleClose(currentBlock);
     assert.equals(bcReq.length,0, "no more requests needed to be sent to blockchain");
     assert.end();
   })
+
+  t.test('channel handleBlock does generate close event');
 
 
 });
