@@ -27,7 +27,7 @@ class MediatedTransferState extends message.MediatedTransfer{
 
 }
 
-const Initiator = new machina.BehavioralFsm( {
+const InitiatorFactory = function(){ return new machina.BehavioralFsm( {
 
     initialize: function() {
       //a shared event emitter between all the state machines
@@ -101,9 +101,9 @@ const Initiator = new machina.BehavioralFsm( {
 
 } );
 
+}
 
-
-const Target = new machina.BehavioralFsm( {
+const TargetFactory = function(){ return new machina.BehavioralFsm( {
 
     initialize: function( ) {
         // your setup code goes here...
@@ -195,7 +195,8 @@ const Target = new machina.BehavioralFsm( {
     },
 
 } );
+};
 
 module.exports = {
-  Initiator,Target
+  InitiatorFactory,TargetFactory
 }

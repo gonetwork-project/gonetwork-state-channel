@@ -38,25 +38,17 @@ function createSecretToProof (msgID,nonce,transferredAmount,channelAddress,locks
 function assertState(assert,state,expectedState){
    assert.equal(state.__machina__['mediated-transfer'].state, expectedState);
 }
+
+
+
 test('test stateMachine transfers', function(t){
    initiatorEvents = [];
     targetEvents = [];
     serialEvents = [];
 
 
-    stateMachine.Initiator.on("*",function(event,state){
-      if(event.startsWith("GOT.")){
-        serialEvents.push(event);
-      }
-      initiatorEvents.push(state)
-    });
-    stateMachine.Target.on("*",function  (event,state) {
-      if(event.startsWith("GOT.")){
-        serialEvents.push(event);
-      }
-
-      targetEvents.push(state);
-    });
+  var Target = null;
+  var Initiator = null;
   function setup(assert){
     assertEmit = function(event){
       assert.equal(serialEvents[serialEvents.length-1],event,true);
@@ -98,6 +90,22 @@ test('test stateMachine transfers', function(t){
         hashLock:util.sha3(secret)
       }));
 
+    Initiator = stateMachine.InitiatorFactory();
+    Target = stateMachine.TargetFactory();
+
+     Initiator.on("*",function(event,state){
+      if(event.startsWith("GOT.")){
+        serialEvents.push(event);
+      }
+      initiatorEvents.push(state)
+    });
+    Target.on("*",function  (event,state) {
+      if(event.startsWith("GOT.")){
+        serialEvents.push(event);
+      }
+
+      targetEvents.push(state);
+    });
   }
 
 
@@ -106,7 +114,7 @@ test('test stateMachine transfers', function(t){
     setup(assert);
 
 
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -115,7 +123,7 @@ test('test stateMachine transfers', function(t){
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock);
+    Target.handle(receivedMT,'init',currentBlock);
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -126,13 +134,13 @@ test('test stateMachine transfers', function(t){
     requestSecret.sign(target.pk);
 
     var receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
 
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     try{
-      stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+      Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     }catch(err){
       assert.equals(err.message, "no signature to recover address from","state should not move ahead incase secret is learned through blockchain or leak");
 
@@ -140,19 +148,19 @@ test('test stateMachine transfers', function(t){
     assertState(assert,receivedMT,'awaitRevealSecret');
 
     revealSecret.sign(initiator.pk);
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitSecretToProof');
     assertEmit('GOT.sendRevealSecret');
 
     var targetRS = createRevealSecret(targetEvents[targetEvents.length-1].client.from, targetEvents[targetEvents.length-1].client.secret);
      try{
-      stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
+      Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
     }catch(err){
       assert.equals(err.message, "no signature to recover address from","state should not move ahead incase revealSecret is not sent by to");
     }
     assertState(assert,mediatedTransferState,'awaitRevealSecret');
     targetRS.sign(target.pk);
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
+    Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
     assertState(assert,mediatedTransferState, 'completedTransfer');
     assertState(assert,receivedMT, 'awaitSecretToProof');
     assertEmit('GOT.sendSecretToProof');
@@ -167,7 +175,7 @@ test('test stateMachine transfers', function(t){
     secretToProof.sign(initiator.pk);
 
     var receivedSTP = new message.SecretToProof(JSON.parse(JSON.stringify(secretToProof),message.JSON_REVIVER_FUNC));
-    stateMachine.Target.handle(receivedMT, 'receiveSecretToProof', receivedSTP);
+    Target.handle(receivedMT, 'receiveSecretToProof', receivedSTP);
     assertState(assert,receivedMT,'completedTransfer');
 
 
@@ -178,7 +186,7 @@ test('test stateMachine transfers', function(t){
   t.test('initiator: invalid secret request should not move state ahead',function(assert){
     setup(assert);
 
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -187,7 +195,7 @@ test('test stateMachine transfers', function(t){
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock);
+    Target.handle(receivedMT,'init',currentBlock);
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -199,7 +207,7 @@ test('test stateMachine transfers', function(t){
     requestSecret.sign(target.pk);
 
     var receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
 
     // //invalid amount
@@ -210,7 +218,7 @@ test('test stateMachine transfers', function(t){
     // requestSecret.sign(target.pk);
 
     // receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    // stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    // Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     // assertState(assert,mediatedTransferState, 'awaitRequestSecret');
 
     //invalid msgID
@@ -220,7 +228,7 @@ test('test stateMachine transfers', function(t){
       amount:targetEvents[targetEvents.length-1].client.lock.amount});
     requestSecret.sign(target.pk);
     receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
 
     //invalid signature
@@ -230,7 +238,7 @@ test('test stateMachine transfers', function(t){
       amount:targetEvents[targetEvents.length-1].client.lock.amount});
     requestSecret.sign(pk_addr[2].pk);
     receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
 
 
@@ -241,7 +249,7 @@ test('test stateMachine transfers', function(t){
     setup(assert);
 
 
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -250,7 +258,7 @@ test('test stateMachine transfers', function(t){
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock);
+    Target.handle(receivedMT,'init',currentBlock);
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -261,20 +269,20 @@ test('test stateMachine transfers', function(t){
     requestSecret.sign(target.pk);
 
     var receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
 
     //improperly signed reveal secret
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     revealSecret.sign(pk_addr[2].pk)
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitRevealSecret');
 
     //imporper secret
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, "SECRET2");
     revealSecret.sign(initiator.pk)
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitRevealSecret');
 
     assert.end();
@@ -285,7 +293,7 @@ test('test stateMachine transfers', function(t){
     setup(assert);
 
 
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -294,7 +302,7 @@ test('test stateMachine transfers', function(t){
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock);
+    Target.handle(receivedMT,'init',currentBlock);
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -305,13 +313,13 @@ test('test stateMachine transfers', function(t){
     requestSecret.sign(target.pk);
 
     var receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
 
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     try{
-      stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+      Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     }catch(err){
       assert.equals(err.message, "no signature to recover address from","state should not move ahead incase secret is learned through blockchain or leak");
 
@@ -319,20 +327,20 @@ test('test stateMachine transfers', function(t){
     assertState(assert,receivedMT,'awaitRevealSecret');
 
     revealSecret.sign(initiator.pk);
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitSecretToProof');
     assertEmit('GOT.sendRevealSecret');
 
     //invalid signature
     var targetRS = createRevealSecret(targetEvents[targetEvents.length-1].client.from, targetEvents[targetEvents.length-1].client.secret);
     targetRS.sign(pk_addr[2].pk);
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
+    Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
 
     //invalid secret
     var targetRS = createRevealSecret(targetEvents[targetEvents.length-1].client.from, "SECRET2");
     targetRS.sign(target.pk);
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
+    Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
 
     assert.end()
@@ -343,7 +351,7 @@ test('test stateMachine transfers', function(t){
     setup(assert);
 
 
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -352,7 +360,7 @@ test('test stateMachine transfers', function(t){
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock);
+    Target.handle(receivedMT,'init',currentBlock);
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -363,13 +371,13 @@ test('test stateMachine transfers', function(t){
     requestSecret.sign(target.pk);
 
     var receivedRS = new message.RequestSecret(JSON.parse(JSON.stringify(requestSecret),message.JSON_REVIVER_FUNC));
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',receivedRS);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
 
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     try{
-      stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+      Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     }catch(err){
       assert.equals(err.message, "no signature to recover address from","state should not move ahead incase secret is learned through blockchain or leak");
 
@@ -377,19 +385,19 @@ test('test stateMachine transfers', function(t){
     assertState(assert,receivedMT,'awaitRevealSecret');
 
     revealSecret.sign(initiator.pk);
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitSecretToProof');
     assertEmit('GOT.sendRevealSecret');
 
     var targetRS = createRevealSecret(targetEvents[targetEvents.length-1].client.from, targetEvents[targetEvents.length-1].client.secret);
      try{
-      stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
+      Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
     }catch(err){
       assert.equals(err.message, "no signature to recover address from","state should not move ahead incase revealSecret is not sent by to");
     }
     assertState(assert,mediatedTransferState,'awaitRevealSecret');
     targetRS.sign(target.pk);
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
+    Initiator.handle(mediatedTransferState,'receiveRevealSecret',targetRS);
     assertState(assert,mediatedTransferState, 'completedTransfer');
     assertState(assert,receivedMT, 'awaitSecretToProof');
     assertEmit('GOT.sendSecretToProof');
@@ -404,7 +412,7 @@ test('test stateMachine transfers', function(t){
     secretToProof.sign(pk_addr[2].pk);
 
     var receivedSTP = new message.SecretToProof(JSON.parse(JSON.stringify(secretToProof),message.JSON_REVIVER_FUNC));
-    stateMachine.Target.handle(receivedMT, 'receiveSecretToProof', receivedSTP);
+    Target.handle(receivedMT, 'receiveSecretToProof', receivedSTP);
     assertState(assert,receivedMT,'awaitSecretToProof');
 
 
@@ -432,7 +440,7 @@ test('test stateMachine transfers', function(t){
         hashLock:util.sha3(secret)
       }));
 
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
 
     var mediatedTransfer = new message.MediatedTransfer(initiatorEvents[0].client);
@@ -440,7 +448,7 @@ test('test stateMachine transfers', function(t){
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
     //current block moved ahead, should not accept mediated transfer
-    stateMachine.Target.handle(receivedMT,'init',currentBlock.add(new util.BN(2)));
+    Target.handle(receivedMT,'init',currentBlock.add(new util.BN(2)));
 
     assertEmit('GOT.sendMediatedTransfer');
     assert.equals(serialEvents.length, 1, true);
@@ -469,7 +477,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
         expiration:newExpiration,
         hashLock:util.sha3(secret)
       }));
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -479,7 +487,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock.add(new util.BN(4)));
+    Target.handle(receivedMT,'init',currentBlock.add(new util.BN(4)));
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -489,20 +497,20 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
       amount:targetEvents[targetEvents.length-1].client.lock.amount});
     requestSecret.sign(target.pk);
 
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
 
     assert.equals(serialEvents.length,3,true);
 
 
-    stateMachine.Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(5)));
+    Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(5)));
     assertState(assert,receivedMT, 'expiredTransfer');
 
 
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     revealSecret.sign(initiator.pk);
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'expiredTransfer');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,3,true);
@@ -528,7 +536,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
         expiration:newExpiration,
         hashLock:util.sha3(secret)
       }));
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -537,7 +545,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock.add(new util.BN(1)));
+    Target.handle(receivedMT,'init',currentBlock.add(new util.BN(1)));
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -547,17 +555,17 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
       amount:targetEvents[targetEvents.length-1].client.lock.amount});
     requestSecret.sign(target.pk);
 
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,3,true);
 
-    stateMachine.Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(2)));
+    Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(2)));
     assertState(assert,receivedMT, 'awaitRevealSecret');
 
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     revealSecret.sign(initiator.pk);
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitSecretToProof');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,4,true);
@@ -584,7 +592,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
         expiration:newExpiration,
         hashLock:util.sha3(secret)
       }));
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -593,7 +601,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock.add(new util.BN(1)));
+    Target.handle(receivedMT,'init',currentBlock.add(new util.BN(1)));
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -603,22 +611,22 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
       amount:targetEvents[targetEvents.length-1].client.lock.amount});
     requestSecret.sign(target.pk);
 
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,3,true);
 
-    stateMachine.Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(2)));
+    Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(2)));
     assertState(assert,receivedMT, 'awaitRevealSecret');
 
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     revealSecret.sign(initiator.pk);
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitSecretToProof');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,4,true);
 
-    stateMachine.Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(3)));
+    Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(3)));
     assertState(assert,receivedMT, 'awaitSecretToProof');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,4,true);
@@ -644,7 +652,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
         expiration:newExpiration,
         hashLock:util.sha3(secret)
       }));
-    stateMachine.Initiator.handle(mediatedTransferState,'init');
+    Initiator.handle(mediatedTransferState,'init');
     assertState(assert,mediatedTransferState, 'awaitRequestSecret');
     assertEmit('GOT.sendMediatedTransfer');
     //send a mediated transfer
@@ -653,7 +661,7 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
     mediatedTransfer.sign(initiator.pk);
     var receivedMT = new message.MediatedTransfer(JSON.parse(JSON.stringify(mediatedTransfer), message.JSON_REVIVER_FUNC));
 
-    stateMachine.Target.handle(receivedMT,'init',currentBlock.add(new util.BN(1)));
+    Target.handle(receivedMT,'init',currentBlock.add(new util.BN(1)));
     assertState(assert,receivedMT,'awaitRevealSecret');
     assertEmit('GOT.sendRequestSecret');
 
@@ -663,22 +671,22 @@ t.test('target: handle block that expires lock when waiting for secret reveal sh
       amount:targetEvents[targetEvents.length-1].client.lock.amount});
     requestSecret.sign(target.pk);
 
-    stateMachine.Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
+    Initiator.handle(mediatedTransferState,'receiveRequestSecret',requestSecret);
     assertState(assert,mediatedTransferState, 'awaitRevealSecret');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,3,true);
 
-    stateMachine.Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(2)));
+    Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(2)));
     assertState(assert,receivedMT, 'awaitRevealSecret');
 
     var revealSecret = createRevealSecret(initiatorEvents[initiatorEvents.length-1].client.target, initiatorEvents[initiatorEvents.length-1].client.secret);
     revealSecret.sign(initiator.pk);
-    stateMachine.Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
+    Target.handle(receivedMT,'receiveRevealSecret',revealSecret);
     assertState(assert,receivedMT,'awaitSecretToProof');
     assertEmit('GOT.sendRevealSecret');
     assert.equals(serialEvents.length,4,true);
 
-    stateMachine.Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(3)));
+    Target.handle(receivedMT,'handleBlock',currentBlock.add(new util.BN(3)));
     assertState(assert,receivedMT, 'completedTransfer');
     assertEmit('GOT.closeChannel');
     assert.equals(serialEvents.length,5,true);
