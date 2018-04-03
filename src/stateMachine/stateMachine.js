@@ -62,7 +62,7 @@ const InitiatorFactory = function(){ return new machina.BehavioralFsm( {
                   state.msgID.eq(requestSecret.msgID))
                 {
                   //now you have to assume that money is gone
-                  this.emit("GOT.sendRevealSecret",state);
+                  this.emit("GOT.sendRevealSecret",Object.assign(state,{revealTo:state.target}));
                   this.transition(state,"awaitRevealSecret");
                 }
 
@@ -149,7 +149,7 @@ const TargetFactory = function(){ return new machina.BehavioralFsm( {
                 if(state.lock.hashLock.compare(util.sha3(revealSecret.secret))===0 &&
                   state.initiator.compare(revealSecret.from)===0){
                     //in memory "states" object on the target and initator statemachines are now synced
-                    state = Object.assign(state,{secret:revealSecret.secret});
+                    state = Object.assign(state,{secret:revealSecret.secret,revealTo:state.from});
                     //send this backwards to state.from
                     this.emit('GOT.sendRevealSecret',state);
                     this.transition(state,"awaitSecretToProof");
@@ -158,7 +158,6 @@ const TargetFactory = function(){ return new machina.BehavioralFsm( {
 
             },
             handleBlock:function (state,currentBlock) {
-
               if(state.lock.expiration.lte(currentBlock.add(channel.REVEAL_TIMEOUT))){
                 this.transition(state,"expiredTransfer");
               }else{
