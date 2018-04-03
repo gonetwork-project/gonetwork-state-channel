@@ -66,10 +66,10 @@ class Engine {
       this.onRevealSecret(message);
     }else if(message instanceof messageLib.SecretToProof){
       this.onSecretToProof(message);
-    }else if(message instanceof messageLib.DirectTransfer){
-      this.onDirectTransfer(message);
     }else if(message instanceof messageLib.MediatedTransfer){
       this.onMediatedTransfer(message);
+    }else if(message instanceof messageLib.DirectTransfer){
+      this.onDirectTransfer(message);
     }else{
       throw new Error("Invalid Message: uknown message received");
     }
@@ -94,12 +94,12 @@ class Engine {
 
     });
     //update all state machines that are in awaitRevealSecret state
-    map(Object.values(this.messageState),function (messageState) {
+    map(Object.values(this.messageState),function (ms) {
       try{
         //the state machines will take care of echoing RevealSecrets
         //to channel peerStates
 
-        messageState.applyMessage('receiveRevealSecret',revealSecret);
+        ms.applyMessage('receiveRevealSecret',revealSecret);
       }catch(err){
         console.log(err);
       }
@@ -173,10 +173,12 @@ class Engine {
       throw new Error('Invalid MediatedTransfer Received:state channel is not open');
     }
     //register the mediated transfer
+
     channel.handleTransfer(mediatedTransfer,this.currentBlock);
-    if(mediatedTransfer.target.eq(this.address)){
-      this.messageState[mediatedTransfer.msgID] = new MessageState(mediatedTransfer,stateMachine.Target);
-      this.messageState[mediatedTransfer.msgID].applyMessage('init');
+    if(mediatedTransfer.target.compare(this.address)===0){
+      console.log("Start targetStateMachine");
+      this.messageState[mediatedTransfer.msgID] = new MessageState(mediatedTransfer,this.targetStateMachine);
+      this.messageState[mediatedTransfer.msgID].applyMessage('init',this.currentBlock);
     }
   }
 
@@ -381,6 +383,12 @@ class Engine {
           this.signature(mediatedTransfer);
           this.send(mediatedTransfer);
           channel.handleTransfer(mediatedTransfer);
+          break;
+        case 'GOT.sendRequestSecret':
+          var requestSecret = new message.RequestSecret({msgID:state.msgID,to:state.from,
+            hashLock:state.lock.hashLock,amount:state.lock.amount});
+          this.signature(requestSecret);
+          this.send(requestSecret);
           break;
         case 'GOT.sendRevealSecret':
           //technically, this workflow only works when target == to.  In mediated transfers

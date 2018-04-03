@@ -361,6 +361,7 @@ test('test engine', function(t){
       new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
     //console.log(mt.to.toString('hex') +":"+ pk_addr[1].address.toString('hex'));
     var msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+
     engine2.onMessage(msg);
     //console.log(engine.channelByPeer[pk_addr[1].address.toString('hex')]);
 
@@ -374,8 +375,7 @@ test('test engine', function(t){
       new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
       new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(50),new util.BN(0),currentBlock);
 
-
-
+    console.log(sendQueue);
 
 
 
