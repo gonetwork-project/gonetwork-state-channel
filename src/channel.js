@@ -312,7 +312,7 @@ class Channel{
 
   //respond to channel close from blockchain
   handleClosed(closedBlock){
-   this.closeBlock = closedBlock;
+   this.closedBlock = closedBlock;
    this._handleClose("UPDATE_TRANSFER");
   }
 
@@ -320,6 +320,7 @@ class Channel{
     //if we initiated, then handleClosed will just bypass this
     if(!this.updatedProof){
       if(this.peerState.proof.signature){
+
         this.blockchain([method,this.peerState.proof]);
         var lockProofs =
         this._withdrawPeerOpenLocks();
