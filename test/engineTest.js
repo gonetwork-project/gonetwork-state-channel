@@ -412,6 +412,7 @@ test('test engine', function(t){
      engine2.onMessage(secretToProof);
 
 
+     //final states synchronized
       assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
@@ -421,102 +422,6 @@ test('test engine', function(t){
     engine2,channelAddress,
       new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
-    // console.log(sendQueue);
-
-   //  //sent but not prcessed yet by engine(1) as expected
-   //   assertChannelState(assert,
-   //    engine,channelAddress,
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
-   // assertChannelState(assert,
-   //    engine2,channelAddress,
-   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
-   //    new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
-   //  assert.equals(sendQueue.length, 1, "send direct transfer");
-
-
-   //  var msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
-
-   //  engine2.onMessage(msg);
-   //  assertChannelState(assert,
-   //    engine,channelAddress,
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
-   // assertChannelState(assert,
-   //    engine2,channelAddress,
-   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
-
-   //  engine2.sendDirectTransfer(pk_addr[0].address,new util.BN(377));
-   //  msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
-   //  assert.equals(sendQueue.length,2);
-   //  engine.onMessage(msg);
-
-   //  assertChannelState(assert,
-   //    engine,channelAddress,
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
-   // assertChannelState(assert,
-   //    engine2,channelAddress,
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
-
-
-   //  //engine2 has no more money left!
-   //  try{
-   //    engine2.sendDirectTransfer(pk_addr[0].address,new util.BN(377));
-   //  }catch(err){
-   //    //GOOD we caught it
-   //    assert.equals(err.message, "Insufficient funds: direct transfer cannot be completed")
-   //  }
-
-   //  assertChannelState(assert,
-   //    engine,channelAddress,
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
-   // assertChannelState(assert,
-   //    engine2,channelAddress,
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
-
-   //  //now engine(0) tries to send more money then it has
-   //  try{
-   //    engine.sendDirectTransfer(pk_addr[1].address, new util.BN(501+328));
-   //  }catch(err){
-   //    //GOOD we caught it
-   //    assert.equals(err.message, "Invalid transferredAmount: Insufficient Balance")
-   //  }
-
-   //  assertChannelState(assert,
-   //    engine,channelAddress,
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
-   // assertChannelState(assert,
-   //    engine2,channelAddress,
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
-
-
-   //  engine.sendDirectTransfer(pk_addr[1].address, new util.BN(501+327));
-   //  msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
-   //  assert.equals(sendQueue.length,4);
-   //  engine2.onMessage(msg);
-
-   //   assertChannelState(assert,
-   //    engine,channelAddress,
-   //    new util.BN(2),new util.BN(501),new util.BN(501+327),new util.BN(0),new util.BN(0),
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
-   // assertChannelState(assert,
-   //    engine2,channelAddress,
-   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
-   //    new util.BN(2),new util.BN(501),new util.BN(501+327),new util.BN(0),new util.BN(0),currentBlock);
-
-   // engine.closeChannel(channelAddress);
-   // console.log(engine.channels[channelAddress.toString('hex')].state);
-   // assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
-   // assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
-
-
 
     assert.end();
   })
