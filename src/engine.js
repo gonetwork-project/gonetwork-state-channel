@@ -50,7 +50,7 @@ class Engine {
     if(!channelLib.SETTLE_TIMEOUT.gt(channelLib.REVEAL_TIMEOUT)){
       throw new Error("SETTLE_TIMEOUT must be strictly and much larger then REVEAL_TIMEOUT");
     }
-
+    this.currentBlock = new util.BN(0);
   }
 
   //message handlers
@@ -241,19 +241,20 @@ class Engine {
   }
 
   onBlock(block){
-    this.currentBlock = currentBlock;
+    this.currentBlock = block;
     //handleBlock by all the in-flight messages
     //timeout or take action as needed
-    map(Object.values(this.messageState),function (messageState) {
+    var self = this;
+    Object.values(this.messageState).map(function (messageState) {
       try{
-        messageState.applyMessage('handleBlock',this.currentBlock,channel.REVEAL_TIMEOUT);
+
+        messageState.applyMessage('handleBlock',self.currentBlock);
       }catch(err){
         console.log(err);
       }
     });
     //handleBlock for each of the channels, perhaps SETTLE_TIMEOUT has passed
-    var self = this;
-    Object.values(this.channesl).map(function(channel){
+    Object.values(this.channels).map(function(channel){
       channel.handleBlock(self.currentBlock);
     });
   }
