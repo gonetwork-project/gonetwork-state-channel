@@ -266,7 +266,10 @@ class Channel{
   createSecretToProof(msgID,secret){
     var lock = this.myState.getLockFromSecret(secret);
     if(!lock){
-      throw new Error("Invalid Secret: lock does not exist for secret");
+      console.log(Object.keys(this.myState.openLocks).map(function (l) {
+        console.log("openLock:"+l);
+      }));
+      throw new Error("Invalid Secret: lock does not exist for secret:"+secret);
     }
     var mt = this.myState._computeMerkleTreeWithoutHashlock(lock);
     var transferredAmount = this.myState.transferredAmount.add(lock.amount);
