@@ -84,38 +84,44 @@ class Engine {
   onRevealSecret(revealSecret){
     //handle reveal secret for all channels that have a lock created by it
     //we dont care where it came from unless we want to progress our state machine
-    map(Object.values(this.channelByPeer), function (channel) {
+    var errors = [];
+    Object.values(this.channelByPeer).map(function (channel) {
       try{
         channel.handleRevealSecret(revealSecret);
-
       }catch(err){
-        console.log(err);
+        errors.push(err)
       }
 
     });
     //update all state machines that are in awaitRevealSecret state
-    map(Object.values(this.messageState),function (ms) {
+    Object.values(this.messageState).map(function (messageState) {
       try{
         //the state machines will take care of echoing RevealSecrets
         //to channel peerStates
 
-        ms.applyMessage('receiveRevealSecret',revealSecret);
+        messageState.applyMessage('receiveRevealSecret',revealSecret);
       }catch(err){
-        console.log(err);
+        errors.push(err)
       }
     });
 
+    errors.map(function (error) {
+      console.log(error);
+    });
   }
 
   onSecretToProof(secretToProof){
     //handle reveal secret for all channels that have a lock created by it.
     //this is in the case where for some reason we get a SecretToProof before
     //a reveal secret
-    map(Object.values(this.channelByPeer), function (channel) {
+
+    //encapsulate in message.RevealSecret type of message, we dont have to sign it
+    //it is not required
+    var tempRevealSecret = new message.RevealSecret({secret:secretToProof.secret})
+    this.signature(tempRevealSecret);
+    Object.values(this.channelByPeer).map(function (channel) {
       try{
-        //encapsulate in message.RevealSecret type of message, we dont have to sign it
-        //it is not required
-        var tempRevealSecret = new message.RevealSecret({secret:secretToProof.secret})
+
         channel.handleRevealSecret(tempRevealSecret);
       }catch(err){
         console.log(err);
@@ -123,12 +129,11 @@ class Engine {
 
     });
 
-    map(Object.values(this.messageState),function (messageState) {
+    Object.values(this.messageState).map(function (messageState) {
       try{
         //the state machines will take care of echoing RevealSecrets
         //to channel peerStates
-
-        messageState.applyMessage('receiveRevealSecret',revealSecret);
+        messageState.applyMessage('receiveRevealSecret',tempRevealSecret);
       }catch(err){
         console.log(err);
       }
@@ -194,9 +199,11 @@ class Engine {
     //var expiration = this.currentBlock.add(channel.SETTLE_TIMEOUT);
     var msgID = this.incrementedMsgID();
     var mediatedTransferState = ({msgID:msgID,
-      hashLock:hashLock,
-      amount:amount,
-      expiration:expiration,
+      "lock":{
+        hashLock:hashLock,
+        amount:amount,
+        expiration:expiration,
+      },
       target:to,
       initiator:this.address,
       currentBlock:this.currentBlock,
@@ -374,9 +381,9 @@ class Engine {
 
           //msgID,hashLock,amount,expiration,target,initiator,currentBlock
           var mediatedTransfer = channel.createMediatedTransfer(state.msgID,
-            state.hashLock,
-            state.amount,
-            state.expiration,
+            state.lock.hashLock,
+            state.lock.amount,
+            state.lock.expiration,
             state.target,
             state.initiator,
             state.currentBlock);
@@ -404,8 +411,10 @@ class Engine {
           if(!channel.isOpen()){
             throw new Error("Channel is not open");
           }
-          var secretToProof = channel.createSecretToProof({msgID:state.msgID,secret:state.secret});
+
+          var secretToProof = channel.createSecretToProof(state.msgID,state.secret);
           this.signature(secretToProof)
+
           this.send(secretToProof);
           channel.handleTransfer(secretToProof);
           break;
