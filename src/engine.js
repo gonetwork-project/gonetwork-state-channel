@@ -325,7 +325,7 @@ class Engine {
   }
 
   onClosed(channelAddress,closingBlock){
-    if(!this.channels.hasOwnProperty(channelAddress)){
+    if(!this.channels.hasOwnProperty(channelAddress.toString('hex'))){
       throw new Error("Invalid Closed: unknown channel");
     }
     var channel = this.channels[channelAddress.toString('hex')];
@@ -371,62 +371,73 @@ class Engine {
 
   //Internal Event Handlers Triggered by state-machine workflows
   handleEvent(event, state){
-    if(event.startsWith('GOT.')){
+    try{
+      if(event.startsWith('GOT.')){
 
-      var channel = this.channelByPeer[state.to.toString('hex')];
-      switch(event){
-        case 'GOT.sendMediatedTransfer':
-          if(!channel.isOpen()){
-            throw new Error("Channel is not open");
+        var channel = this.channelByPeer[state.to.toString('hex')];
+        switch(event){
+          case 'GOT.sendMediatedTransfer':
+            if(!channel.isOpen()){
+              throw new Error("Channel is not open");
+            }
+
+            //msgID,hashLock,amount,expiration,target,initiator,currentBlock
+            var mediatedTransfer = channel.createMediatedTransfer(state.msgID,
+              state.lock.hashLock,
+              state.lock.amount,
+              state.lock.expiration,
+              state.target,
+              state.initiator,
+              state.currentBlock);
+            this.signature(mediatedTransfer);
+            this.send(mediatedTransfer);
+            channel.handleTransfer(mediatedTransfer);
+            break;
+          case 'GOT.sendRequestSecret':
+            var requestSecret = new message.RequestSecret({msgID:state.msgID,to:state.from,
+              hashLock:state.lock.hashLock,amount:state.lock.amount});
+            this.signature(requestSecret);
+            this.send(requestSecret);
+            break;
+          case 'GOT.sendRevealSecret':
+            //technically, this workflow only works when target == to.  In mediated transfers
+            //we need to act more generally and have the state machine tell us where we should
+            //send this secret (backwards and forwards maybe)
+            var revealSecret = new message.RevealSecret({to:state.revealTo, secret:state.secret});
+            this.signature(revealSecret);
+            this.send(revealSecret);
+            //we dont register the secret, we wait for the echo Reveal
+            break;
+          case 'GOT.sendSecretToProof':
+            //OPTIMIZE:technically we can still send sec2proof,
+            //it would beneficial to our partner saving $$ for lock withdrawal
+            //but for now we act in no interest of the  peer endpoint :( meanie
+            if(!channel.isOpen()){
+              throw new Error("Channel is not open");
+            }
+
+            var secretToProof = channel.createSecretToProof(state.msgID,state.secret);
+            this.signature(secretToProof)
+
+            this.send(secretToProof);
+            channel.handleTransfer(secretToProof);
+            break;
+          case 'GOT.closeChannel':
+            channel.handleClose();
+            break;
           }
-
-          //msgID,hashLock,amount,expiration,target,initiator,currentBlock
-          var mediatedTransfer = channel.createMediatedTransfer(state.msgID,
-            state.lock.hashLock,
-            state.lock.amount,
-            state.lock.expiration,
-            state.target,
-            state.initiator,
-            state.currentBlock);
-          this.signature(mediatedTransfer);
-          this.send(mediatedTransfer);
-          channel.handleTransfer(mediatedTransfer);
-          break;
-        case 'GOT.sendRequestSecret':
-          var requestSecret = new message.RequestSecret({msgID:state.msgID,to:state.from,
-            hashLock:state.lock.hashLock,amount:state.lock.amount});
-          this.signature(requestSecret);
-          this.send(requestSecret);
-          break;
-        case 'GOT.sendRevealSecret':
-          //technically, this workflow only works when target == to.  In mediated transfers
-          //we need to act more generally and have the state machine tell us where we should
-          //send this secret (backwards and forwards maybe)
-          var revealSecret = new message.RevealSecret({to:state.target, secret:state.secret});
-          this.signature(revealSecret);
-          this.send(revealSecret);
-          //we dont register the secret, we wait for the echo Reveal
-          break;
-        case 'GOT.sendSecretToProof':
-          //technically we can still send sec2proof, it may benefit our partner saving $$ for withdrawal
-          if(!channel.isOpen()){
-            throw new Error("Channel is not open");
-          }
-
-          var secretToProof = channel.createSecretToProof(state.msgID,state.secret);
-          this.signature(secretToProof)
-
-          this.send(secretToProof);
-          channel.handleTransfer(secretToProof);
-          break;
-        case 'GOT.closeChannel':
-          channel.handleClose();
-          break;
+          return;
         }
-        return;
       }
+    catch(err){
+      this.handleError(err);
     }
+  }
 
+  handleError(err){
+    console.error(err);
+
+  }
 }
 
 module.exports = {
