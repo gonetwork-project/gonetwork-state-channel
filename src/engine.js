@@ -3,6 +3,7 @@ const channelLib = require('./channel');
 const channelStateLib = require('./channelState');
 const stateMachineLib = require('./stateMachine/stateMachine');
 const util = require('ethereumjs-util');
+const events = require('events');
 
 class MessageState{
   constructor(state,stateMachine){
@@ -16,9 +17,10 @@ class MessageState{
 
 }
 
-class Engine{
+class Engine {
 
   constructor(address,signatureService,blockchainService){
+
     //dictionary of channels[peerAddress] that are pending mining
     this.pendingChannels = {};
     this.channels = {};
@@ -32,9 +34,16 @@ class Engine{
 
     this.publicKey;
     this.address = address;
+    this.initiatorStateMachine = stateMachineLib.InitiatorFactory();
+    this.targetStateMachine = stateMachineLib.TargetFactory();
+    var self = this;
+    this.initiatorStateMachine.on("*",function(event,state){
+      self.handleEvent(event,state);
+    });
+    this.targetStateMachine.on("*",function(event,state){
+      self.handleEvent(event,state);
+    });
 
-    stateMachineLib.Initiator.on("*",this.handleEvent.bind(this));
-    stateMachineLib.Target.on("*",this.handleEvent.bind(this));
     this.signature = signatureService;
     this.blockchain = blockchainService;
     //sanity check
@@ -44,9 +53,6 @@ class Engine{
 
   }
 
-  decodeMessage(jsonObj){
-
-  }
   //message handlers
   onMessage(message){
     //TODO: all messages must be signed here?
@@ -178,30 +184,25 @@ class Engine{
     if(!this.channelByPeer.hasOwnProperty(to.toString('hex'))){
       throw new Error("Invalid MediatedTransfer: channel does not exist");
     }
-    var channel = this.channelByPeer[to.from.toString('hex')];
-    if(channel.state!== channel.CHANNEL_STATE_OPEN){
+    var channel = this.channelByPeer[to.toString('hex')];
+    if(!channel.isOpen()){
       throw new Error('Invalid Channel State:state channel is not open');
     }
 
-    var expiration = this.currentBlock.add(channel.SETTLE_TIMEOUT);
+    //var expiration = this.currentBlock.add(channel.SETTLE_TIMEOUT);
     var msgID = this.incrementedMsgID();
-    //(msgID,hashLock,amount,expiration,target,initiator,currentBlock)
-    var mediatedTransfer = channel.createMediatedTransfer(
-      msgID,
-      secretHashPair.hash,
-      amount,
-      expiration,
-      target,
-      this.address,
-      this.currentBlock);
-
-    var mediatedTransferState = new stateMachine.MediatedTransferState(Object.assign({
+    var mediatedTransferState = ({msgID:msgID,
+      hashLock:hashLock,
+      amount:amount,
+      expiration:expiration,
+      target:to,
+      initiator:this.address,
+      currentBlock:this.currentBlock,
       secret:secret,
-      hashLock:hashLock
-    },mediatedTransfer));
-    this.messageState[msgID] = new MessageState(mediatedTransferState,stateMachine.Initiator);
-    this.messageState[msgID].applyMessage('init');
+      to:channel.peerState.address});
 
+    this.messageState[msgID] = new MessageState(mediatedTransferState,this.initiatorStateMachine);
+    this.messageState[msgID].applyMessage('init');
   }
 
 
@@ -217,7 +218,6 @@ class Engine{
     var msgID = this.incrementedMsgID();
     var directTransfer = channel.createDirectTransfer(msgID,transferredAmount);
     this.signature(directTransfer);
-
     this.send(directTransfer);
     channel.handleTransfer(directTransfer);
   }
@@ -282,35 +282,35 @@ class Engine{
       delete this.pendingChannels[peerAddress.toString('hex')];
     }
 
-    if(this.channelByPeer.hasOwnProperty(peerAddress.toString('hex')) || this.channels.hasOwnProperty(channelAddress.toString('hex'))){
+    var existingChannel = this.channelByPeer[peerAddress.toString('hex')];
+    if(existingChannel && existingChannel.state !== channelLib.CHANNEL_STATE_SETTLED){
       throw new Error("Invalid Channel: cannot add new channel as it already exists");
     }
 
-
-
-     var myState = new channelStateLib.ChannelState({depositBalance:myDepositBalance,
+     var stateOne = new channelStateLib.ChannelState({depositBalance:myDepositBalance,
       address:this.address
     });
 
-    var peerState = new channelStateLib.ChannelState({depositBalance:peerDepositBalance,
+    var stateTwo = new channelStateLib.ChannelState({depositBalance:peerDepositBalance,
         address:peerAddress
       });
-
+    console.log("CALLED ON NEW CHANNEL FROM:"+this.address.toString('hex'));
       //constructor(peerState,myState,channelAddress,settleTimeout,revealTimeout,currentBlock){
-    var channel = new channelLib.Channel(peerState,myState,channelAddress,
+    var channel = new channelLib.Channel(stateTwo,stateOne,channelAddress,
        this.currentBlock,this.blockchain);
 
     this.channels[channel.channelAddress.toString('hex')] = channel;
+    console.log("ADDING:"+channel.peerState.address.toString('hex'));
     this.channelByPeer[channel.peerState.address.toString('hex')] = channel;
   }
 
   closeChannel(channelAddress){
-    if(!this.channels.hasOwnProperty(channelAddress)){
+    if(!this.channels.hasOwnProperty(channelAddress.toString('hex'))){
       throw new Error("Invalid Close: unknown channel");
     }
     var channel = this.channels[channelAddress.toString('hex')];
     if(channel.isOpen()){
-      channel.handleClose(closingBlock);
+      channel.handleClose(this.currentBlock);
     }
   }
 
@@ -358,44 +358,56 @@ class Engine{
     this.channels[channelAddress.toString('hex')].handleDeposit(depositAddress,depositBalance);
   }
 
+
   //Internal Event Handlers Triggered by state-machine workflows
   handleEvent(event, state){
-    //state: MediatedTransferState
     if(event.startsWith('GOT.')){
-    var channel = this.channelByPeer[state.to.toString('hex')];
-    switch(event){
-      case 'GOT.sendMediatedTransfer':
-        if(!channel.isOpen()){
-          throw new Error("Channel is not open");
+
+      var channel = this.channelByPeer[state.to.toString('hex')];
+      switch(event){
+        case 'GOT.sendMediatedTransfer':
+          if(!channel.isOpen()){
+            throw new Error("Channel is not open");
+          }
+
+          //msgID,hashLock,amount,expiration,target,initiator,currentBlock
+          var mediatedTransfer = channel.createMediatedTransfer(state.msgID,
+            state.hashLock,
+            state.amount,
+            state.expiration,
+            state.target,
+            state.initiator,
+            state.currentBlock);
+          this.signature(mediatedTransfer);
+          this.send(mediatedTransfer);
+          channel.handleTransfer(mediatedTransfer);
+          break;
+        case 'GOT.sendRevealSecret':
+          //technically, this workflow only works when target == to.  In mediated transfers
+          //we need to act more generally and have the state machine tell us where we should
+          //send this secret (backwards and forwards maybe)
+          var revealSecret = new message.RevealSecret({to:state.target, secret:state.secret});
+          this.signature(revealSecret);
+          this.send(revealSecret);
+          //we dont register the secret, we wait for the echo Reveal
+          break;
+        case 'GOT.sendSecretToProof':
+          //technically we can still send sec2proof, it may benefit our partner saving $$ for withdrawal
+          if(!channel.isOpen()){
+            throw new Error("Channel is not open");
+          }
+          var secretToProof = channel.createSecretToProof({msgID:state.msgID,secret:state.secret});
+          this.signature(secretToProof)
+          this.send(secretToProof);
+          channel.handleTransfer(secretToProof);
+          break;
+        case 'GOT.closeChannel':
+          channel.handleClose();
+          break;
         }
-        var msg = channel.createMediatedTransfer(state);
-        this.signature(msg);
-        this.send(msg);
-        this.handleTransfer(mediatedTransfer);
-        break;
-      case 'GOT.sendRevealSecret':
-        if(!channel.isOpen()){
-          throw new Error("Channel is not open");
-        }
-        var msg = new message.RevealSecret({to:state.target, secret:state.secret});
-        this.signature(msg);
-        this.send(msg);
-        break;
-      case 'GOT.sendSecretToProof':
-        if(!channel.isOpen()){
-          throw new Error("Channel is not open");
-        }
-        var msg = channel.createSecretToProof({msgID:state.msgID,secret:state.secret});
-        this.signature(msg)
-        this.send(msg);
-        break;
-      case 'GOT.closeChannel':
-        channel.handleClose();
-        break;
+        return;
       }
-      return;
     }
-  }
 
 }
 

@@ -1,8 +1,8 @@
-const test = require('tape');
-const engine = require('../src/engine');
-const channel = require('../src/channel');
-const util = require('ethereumjs-util');
-const message = require('../src/message');
+test = require('tape');
+engineLib = require('../src/engine');
+channel = require('../src/channel');
+util = require('ethereumjs-util');
+message = require('../src/message');
 
 var privateKey =  util.toBuffer('0xe331b6d69882b4cb4ea581d88e0b604039a3de5967688d3dcffdd2270c0fd109');
 var publicKey =util.privateToPublic(privateKey);
@@ -21,10 +21,11 @@ address: util.toBuffer('0xe2b7c4c2e89438c2889dcf4f5ea935044b2ba2b0')
 function assertChannelState(assert,
       engine,channelAddress,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount,
       peerNonce,peerDepositBalance,peerTransferredAmount,peerLockedAmount,peerUnlockedAmount,currentBlock){
-  var state = engine.channels[channelAddress.toString('hex')].myState;
-  assertStateBN(assert,state,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount,currentBlock)
-  state = engine.channels[channelAddress.toString('hex')].peerState;
-  assertStateBN(assert, state, peerNonce,peerDepositBalance,peerTransferredAmount,peerLockedAmount,peerUnlockedAmount,currentBlock);
+
+  var state1 = engine.channels[channelAddress.toString('hex')].myState;
+  assertStateBN(assert,state1,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount,currentBlock)
+  var state2 = engine.channels[channelAddress.toString('hex')].peerState;
+  assertStateBN(assert, state2, peerNonce,peerDepositBalance,peerTransferredAmount,peerLockedAmount,peerUnlockedAmount,currentBlock);
 
    };
 function assertStateBN(assert,state,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount,currentBlock){
@@ -39,15 +40,16 @@ function assertStateBN(assert,state,nonce,depositBalance,transferredAmount,locke
   assert.equals(state.depositBalance.eq(new util.BN(depositBalance)),true, "correct depositBalance in state");
 }
 
-
-test('test engine', function(t){
-  function createEngine(pkIndex){
-    return new engine.Engine(pk_addr[pkIndex].address, function (msg) {
+function createEngine(pkIndex,blockchainService){
+    var e =  new engineLib.Engine(pk_addr[pkIndex].address, function (msg) {
       console.log("SIGNING MESSAGE");
       msg.sign(pk_addr[pkIndex].pk)
-    });
+    },blockchainService);
+    return e;
+}
 
-  }
+test('test engine', function(t){
+
 
   t.test("can initialize engine",function (assert) {
     var engine = createEngine(0);
@@ -120,11 +122,26 @@ test('test engine', function(t){
 
   t.test("component test: e2e engine direct transfer", function (assert) {
     var sendQueue = [];
+    var blockchainQueue = [];
     var currentBlock = new util.BN(0);
     var engine = createEngine(0);
     var engine2 = createEngine(1);
 
     //SETUP AND DEPOSIT FOR ENGINES
+     engine.send = function  (msg) {
+      sendQueue.push(message.SERIALIZE(msg));
+    }
+
+    engine2.send = function  (msg) {
+      sendQueue.push(message.SERIALIZE(msg));
+    }
+
+    engine.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
+    engine2.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
 
     engine.onNewChannel(channelAddress,
       pk_addr[0].address,
@@ -137,15 +154,7 @@ test('test engine', function(t){
       pk_addr[1].address,
       new util.BN(0))
 
-    engine.send = function  (msg) {
-      console.log(message.SERIALIZE(msg));
-      sendQueue.push(message.SERIALIZE(msg));
-    }
 
-    engine2.send = function  (msg) {
-      console.log(message.SERIALIZE(msg));
-      sendQueue.push(message.SERIALIZE(msg));
-    }
 
     engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
     engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
@@ -257,10 +266,222 @@ test('test engine', function(t){
       new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
       new util.BN(2),new util.BN(501),new util.BN(501+327),new util.BN(0),new util.BN(0),currentBlock);
 
+   engine.closeChannel(channelAddress);
+   console.log(engine.channels[channelAddress.toString('hex')].state);
+   assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
+   assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
+
 
 
     assert.end();
   })
 
+  t.test("component test: e2e engine mediated transfer", function (assert) {
+
+    var sendQueue = [];
+    var blockchainQueue = [];
+    var currentBlock = new util.BN(0);
+
+
+    var engine = createEngine(0);
+    var engine2 = createEngine(1);
+
+
+    //SETUP AND DEPOSIT FOR ENGINES
+     engine.send = function  (msg) {
+      sendQueue.push(message.SERIALIZE(msg));
+    }
+
+    engine2.send = function  (msg) {
+      sendQueue.push(message.SERIALIZE(msg));
+    }
+
+    engine.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
+    engine2.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
+
+    engine.onNewChannel(channelAddress,
+      pk_addr[0].address,
+      new util.BN(501),
+      pk_addr[1].address,
+      new util.BN(0));
+    engine2.onNewChannel(channelAddress,
+      pk_addr[0].address,
+      new util.BN(501),
+      pk_addr[1].address,
+      new util.BN(0))
+
+
+
+    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+
+
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+    assert.equals(engine.channelByPeer.hasOwnProperty(pk_addr[1].address.toString('hex')),true);
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    //END SETUP
+
+
+    currentBlock = currentBlock.add(new util.BN(1));
+
+    //START  A DIRECT TRANSFER FROM ENGINE(0) to ENGINE(1)
+
+    assert.equals(sendQueue.length, 0, "send direct transfer");
+
+    //to,target,amount,expiration,secret,hashLock
+    var secretHashPair = message.GenerateRandomSecretHashPair();
+
+    var mt = engine.sendMediatedTransfer(
+      pk_addr[1].address,
+      pk_addr[1].address,
+      new util.BN(50),
+      currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+      secretHashPair.secret,
+      secretHashPair.hash,
+      );
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(50),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+    //console.log(mt.to.toString('hex') +":"+ pk_addr[1].address.toString('hex'));
+    var msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+    engine2.onMessage(msg);
+    //console.log(engine.channelByPeer[pk_addr[1].address.toString('hex')]);
+
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(50),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(50),new util.BN(0),currentBlock);
+
+
+
+
+
+
+   //  //sent but not prcessed yet by engine(1) as expected
+   //   assertChannelState(assert,
+   //    engine,channelAddress,
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+   // assertChannelState(assert,
+   //    engine2,channelAddress,
+   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+   //    new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+   //  assert.equals(sendQueue.length, 1, "send direct transfer");
+
+
+   //  var msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+
+   //  engine2.onMessage(msg);
+   //  assertChannelState(assert,
+   //    engine,channelAddress,
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+   // assertChannelState(assert,
+   //    engine2,channelAddress,
+   //    new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+   //  engine2.sendDirectTransfer(pk_addr[0].address,new util.BN(377));
+   //  msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+   //  assert.equals(sendQueue.length,2);
+   //  engine.onMessage(msg);
+
+   //  assertChannelState(assert,
+   //    engine,channelAddress,
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
+   // assertChannelState(assert,
+   //    engine2,channelAddress,
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+
+   //  //engine2 has no more money left!
+   //  try{
+   //    engine2.sendDirectTransfer(pk_addr[0].address,new util.BN(377));
+   //  }catch(err){
+   //    //GOOD we caught it
+   //    assert.equals(err.message, "Insufficient funds: direct transfer cannot be completed")
+   //  }
+
+   //  assertChannelState(assert,
+   //    engine,channelAddress,
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
+   // assertChannelState(assert,
+   //    engine2,channelAddress,
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+   //  //now engine(0) tries to send more money then it has
+   //  try{
+   //    engine.sendDirectTransfer(pk_addr[1].address, new util.BN(501+328));
+   //  }catch(err){
+   //    //GOOD we caught it
+   //    assert.equals(err.message, "Invalid transferredAmount: Insufficient Balance")
+   //  }
+
+   //  assertChannelState(assert,
+   //    engine,channelAddress,
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
+   // assertChannelState(assert,
+   //    engine2,channelAddress,
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+
+   //  engine.sendDirectTransfer(pk_addr[1].address, new util.BN(501+327));
+   //  msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+   //  assert.equals(sendQueue.length,4);
+   //  engine2.onMessage(msg);
+
+   //   assertChannelState(assert,
+   //    engine,channelAddress,
+   //    new util.BN(2),new util.BN(501),new util.BN(501+327),new util.BN(0),new util.BN(0),
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
+   // assertChannelState(assert,
+   //    engine2,channelAddress,
+   //    new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
+   //    new util.BN(2),new util.BN(501),new util.BN(501+327),new util.BN(0),new util.BN(0),currentBlock);
+
+   // engine.closeChannel(channelAddress);
+   // console.log(engine.channels[channelAddress.toString('hex')].state);
+   // assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
+   // assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
+
+
+
+    assert.end();
+  })
+
+  t.test('lock expires on engine handleBlock')
+
+  t.test('expired open lock causes channel to close');
+
+  t.test('blockchain events');
 
 });
+
