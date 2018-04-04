@@ -36,8 +36,12 @@ class Channel{
 
   //the amount of funds that can be sent from -> to in the payment channel
   transferrableFromTo(from,to,currentBlock){
+    var safeBlock = null;
+    if(currentBlock){
+      safeBlock = currentBlock.add(REVEAL_TIMEOUT);
+    }
     return from.depositBalance.
-    sub((from.transferredAmount.add(from.lockedAmount(currentBlock)).add(from.unlockedAmount())))
+    sub((from.transferredAmount.add(from.lockedAmount(safeBlock)).add(from.unlockedAmount())))
     .add(to.transferredAmount.add(to.unlockedAmount()));
   }
 
@@ -185,6 +189,7 @@ class Channel{
         throw new Error("Invalid transferredAmount: SecretToProof does not provide expected lock amount");
       };
     }
+
 
     var transferrable = this.transferrableFromTo(from,to,currentBlock);
 
