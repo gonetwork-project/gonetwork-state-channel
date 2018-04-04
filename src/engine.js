@@ -247,7 +247,7 @@ class Engine {
     var self = this;
     Object.values(this.messageState).map(function (messageState) {
       try{
-
+        console.debug("CALL HANDLE BLOCK ON MESSAGE");
         messageState.applyMessage('handleBlock',self.currentBlock);
       }catch(err){
         console.log(err);
@@ -255,6 +255,7 @@ class Engine {
     });
     //handleBlock for each of the channels, perhaps SETTLE_TIMEOUT has passed
     Object.values(this.channels).map(function(channel){
+      console.debug("CALL HANDLE BLOCK ON CHANNEL");
       channel.handleBlock(self.currentBlock);
     });
   }
@@ -372,11 +373,11 @@ class Engine {
   //Internal Event Handlers Triggered by state-machine workflows
   handleEvent(event, state){
     try{
-      if(event.startsWith('GOT.')){
 
-        var channel = this.channelByPeer[state.to.toString('hex')];
+      if(event.startsWith('GOT.')){
         switch(event){
           case 'GOT.sendMediatedTransfer':
+            var channel = this.channelByPeer[state.to.toString('hex')];
             if(!channel.isOpen()){
               throw new Error("Channel is not open");
             }
@@ -394,12 +395,14 @@ class Engine {
             channel.handleTransfer(mediatedTransfer);
             break;
           case 'GOT.sendRequestSecret':
+            var channel = this.channelByPeer[state.to.toString('hex')];
             var requestSecret = new message.RequestSecret({msgID:state.msgID,to:state.from,
               hashLock:state.lock.hashLock,amount:state.lock.amount});
             this.signature(requestSecret);
             this.send(requestSecret);
             break;
           case 'GOT.sendRevealSecret':
+            var channel = this.channelByPeer[state.to.toString('hex')];
             //technically, this workflow only works when target == to.  In mediated transfers
             //we need to act more generally and have the state machine tell us where we should
             //send this secret (backwards and forwards maybe)
@@ -409,6 +412,7 @@ class Engine {
             //we dont register the secret, we wait for the echo Reveal
             break;
           case 'GOT.sendSecretToProof':
+            var channel = this.channelByPeer[state.to.toString('hex')];
             //OPTIMIZE:technically we can still send sec2proof,
             //it would beneficial to our partner saving $$ for lock withdrawal
             //but for now we act in no interest of the  peer endpoint :( meanie
@@ -423,7 +427,8 @@ class Engine {
             channel.handleTransfer(secretToProof);
             break;
           case 'GOT.closeChannel':
-            channel.handleClose();
+            var channel = this.channelByPeer[state.from.toString('hex')];
+            channel.handleClose(this.currentBlock);
             break;
           }
           return;
