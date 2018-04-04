@@ -604,25 +604,23 @@ test('test engine', function(t){
 
 
 
-      testEventBus.on('beforeSending-11',function (msg) {
+      testEventBus.on('afterReceiving-11',function (msg) {
         console.log(msg);
-        throw new Error();
+
         assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-      new util.BN(2),new util.BN(327),new util.BN(120),new util.BN(0),new util.BN(0),currentBlock);
+      new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),currentBlock);
 
       assertChannelState(assert,
       engine2,channelAddress,
-        new util.BN(2),new util.BN(327),new util.BN(120),new util.BN(0),new util.BN(0),
+        new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),
         new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
 
 
       });
+      engine2.sendDirectTransfer(pk_addr[0].address, new util.BN(100+120));
 
-      setTimeout(function(){
-       engine2.sendDirectTransfer(pk_addr[0].address, new util.BN(100+120));
-     },1000);
 
       });
 
