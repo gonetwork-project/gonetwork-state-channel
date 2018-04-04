@@ -179,7 +179,7 @@ const TargetFactory = function(){ return new machina.BehavioralFsm( {
           },
           handleBlock:function (state,currentBlock) {
             if(state.lock.expiration.lte(currentBlock.add(channel.REVEAL_TIMEOUT))){
-              this.emit('GOT.closeChannel',state.channelAddress);
+              this.emit('GOT.closeChannel',state);
               this.transition(state, "completedTransfer");
             }
           }
