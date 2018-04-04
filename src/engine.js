@@ -64,12 +64,12 @@ class Engine {
       this.onRequestSecret(message);
     }else if(message instanceof messageLib.RevealSecret){
       this.onRevealSecret(message);
-    }else if(message instanceof messageLib.SecretToProof){
-      this.onSecretToProof(message);
     }else if(message instanceof messageLib.MediatedTransfer){
       this.onMediatedTransfer(message);
     }else if(message instanceof messageLib.DirectTransfer){
       this.onDirectTransfer(message);
+    }else if(message instanceof messageLib.SecretToProof){
+      this.onSecretToProof(message);
     }else{
       throw new Error("Invalid Message: uknown message received");
     }
