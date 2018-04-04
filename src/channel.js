@@ -57,6 +57,9 @@ class Channel{
     if(this.settledBlock){
       return CHANNEL_STATE_SETTLED;
     }
+    else if(this.issuedSettleBlock) {
+      return CHANNEL_STATE_IS_SETTLING;
+    }
     else if(this.closedBlock){
       return CHANNEL_STATE_CLOSED;
     }else if(this.issuedCloseBlock){
@@ -313,30 +316,29 @@ class Channel{
 
   //initiate  channel close
   handleClose(block){
-    if(!this.issuedCloseBlock){
-      this._handleClose("CLOSE_CHANNEL");
+    if(!this.issuedCloseBlock && !this.closedBlock){
+      this._handleCloseProof("CLOSE_CHANNEL")
+      this.updatedProof = true;
       this.issuedCloseBlock = block;
     }
   }
 
   //respond to channel close from blockchain
   handleClosed(closedBlock){
-   this.closedBlock = closedBlock;//channel is already closed live, its safe to set this
-   this._handleClose("UPDATE_TRANSFER");
+    this.closedBlock = closedBlock;//channel is already closed live, its safe to set this
+    if(!this.updatedProof){
+      this._handleCloseProof("UPDATE_TRANSFER");
+      this.updatedProof = true;
+      this.issuedCloseBlock = closedBlock;
+    }
   }
 
-  _handleClose(method){
-    //if we initiated, then handleClosed will just bypass this
-    if(!this.updatedProof){
-      if(this.peerState.proof.signature){
-
-        this.blockchain([method,this.peerState.proof]);
+  _handleCloseProof(method){
+    var proof = this.peerState.proof.signature ? this.peerState.proof : null;
+    this.blockchain([method,proof]);
         var lockProofs =
-        this._withdrawPeerOpenLocks();
-        this.blockchain(["WITHDRAW_LOCKS",lockProofs]);
-      }
-      this.updatedProof = true;
-    }
+    this._withdrawPeerOpenLocks();
+    this.blockchain(["WITHDRAW_LOCKS",lockProofs]);
   }
 
   //withdraw all peerstate locks
@@ -355,15 +357,18 @@ class Channel{
   }
 
   handleSettle(currentBlock){
-    if(this.closedBlock.add(channel.SETTLE_TIMEOUT).lt(currentBlock) &&
-      !this.issuedSettleBlock){
-      this.blockchain(["SETTLE",this.channelAddress]);
-      this.issuedSettleBlock = currentBlock;
-    }
+    if(this.closedBlock && !this.issuedSettleBlock  && !this.settledBlock &&
+      this.closedBlock.add(SETTLE_TIMEOUT).lt(currentBlock)){
+        this.blockchain(["SETTLE",this.channelAddress]);
+        this.issuedSettleBlock = currentBlock;
+      }
+
   }
 
   handleSettled(block){
-    this.settledBlock = block;
+    if(this.closedBlock){//cannot settle without closing
+      this.settledBlock = block;
+    }
   }
 
   //Contract logged deposit event
