@@ -18,7 +18,15 @@ address: util.toBuffer('0x43068d574694419cb76360de33fbd177ecd9d3c6')
 address: util.toBuffer('0xe2b7c4c2e89438c2889dcf4f5ea935044b2ba2b0')
 }];
 
-
+function assertProof(assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from){
+  assert.equals(transfer.nonce.eq(message.TO_BN(nonce)),true,"correct nonce in transfer");
+  assert.equals(transfer.transferredAmount.eq(new util.BN(transferredAmount)),true, "correct transferredAmount in transfer");
+  assert.equals(transfer.channelAddress.compare(util.toBuffer(channelAddress)),0,"correct channelAddress in transfer");
+  assert.equals(transfer.locksRoot.compare(util.toBuffer(locksRoot)),0, "correct locksRoot in transfer");
+  if(from){
+      assert.equals(transfer.from.compare(from),0, "correct from recovery in transfer");
+  }
+}
 
 class TestEventBus extends events.EventEmitter{
   constructor(){
@@ -26,6 +34,7 @@ class TestEventBus extends events.EventEmitter{
     this.engine = {};
     this.on('send',this.onReceive);
     this.msgCount=0;
+    this.byPass = false;
   }
 
   addEngine(engine){
@@ -37,7 +46,9 @@ class TestEventBus extends events.EventEmitter{
       var emitter = self;
       setTimeout(function(){
         emitter.emit('beforeSending-'+emitter.msgCount,msg);
-        emitter.emit('send',message.SERIALIZE(msg));
+        if(!this.byPass){
+          emitter.emit('send',message.SERIALIZE(msg));
+        }
         emitter.emit('afterSending-'+emitter.msgCount, msg)
       }, 100);
     }
@@ -50,7 +61,9 @@ class TestEventBus extends events.EventEmitter{
     this.msgCount++;
     var msg = message.DESERIALIZE_AND_DECODE_MESSAGE(packet);
     this.emit('beforeReceiving-'+this.msgCount,msg);
-    this.engine[msg.to.toString('hex')].onMessage(msg);
+    if(!this.byPass){
+      this.engine[msg.to.toString('hex')].onMessage(msg);
+    }
     this.emit('afterReceiving-'+this.msgCount,msg);
 
   }
@@ -477,22 +490,30 @@ test('test engine', function(t){
 
     assert.equals(blockchainQueue.length, 2, "blockchain");
     assert.equals(blockchainQueue[0][0],"CLOSE_CHANNEL");
+    assert.notEqual(blockchainQueue[0][1],null);
     assert.equals(blockchainQueue[1][0],"WITHDRAW_LOCKS");
-
+    assert.equals(blockchainQueue[1][1].length,0);//no locks to unlock
      //blockchain responds with close events
     blockchainQueue = [];
     currentBlock =currentBlock.add(new util.BN(1));
     engine.onClosed(channelAddress,currentBlock);
     assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_CLOSED);
     assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
-    assert.equals(blockchainQueue.length, 0,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
+
+    assert.equals(blockchainQueue.length, 2,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
+    console.log(blockchainQueue);
+    assert.equals(blockchainQueue[0][1], null,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
+    assert.equals(blockchainQueue[1][1].length, 0,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
 
 
 
     assert.end();
   })
+  function assertState(assert,state,expectedState){
+     assert.equal(state.__machina__['mediated-transfer'].state, expectedState);
+  }
 
-  t.test('lock expires on engine handleBlock',function (assert) {
+   t.test('lock expires on engine handleBlock',function (assert) {
     var blockchainQueue = [];
     var currentBlock = new util.BN(0);
 
@@ -547,6 +568,14 @@ test('test engine', function(t){
       secretHashPair.secret,
       secretHashPair.hash,
       );
+    //MsgCount , engine(1) <-> engine(2)
+    //                START TRANSFER
+    //1 , MediatedTransfer ->
+    //2 ,                  <- RequestSecret
+    //3 , RevealSecret     ->
+    //4 ,                  <- RevealSecret
+    //5 , secretToProof    ->
+    //                COMPLETED TRANSFER
 
      testEventBus.on('afterReceiving-4',function (msg) {
       //we applied the revealSecret and secretToProof locally, now we are just waiting for other endpoint
@@ -562,7 +591,7 @@ test('test engine', function(t){
         new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(50),currentBlock);
     });
     testEventBus.on('afterReceiving-5',function () {
-
+      //One Secret Completed, Second Secret will timeout before reveal sent
       assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
@@ -573,9 +602,19 @@ test('test engine', function(t){
         new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
         new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
 
+      testEventBus.on('beforeReceiving-8',function (msg) {
+        //before we apply the reveal secret, we are going to move this ahead and expire the transfer, this should not
+        //cause any blockchain events and further processing just moves one without failing
+        assert.equals(msg.from.compare(engine2.address),0);
+        //we dont want to send this message, but instead we want to
+        //cause the lock to timeout
 
-      var secretHashPair = message.GenerateRandomSecretHashPair();
+        assertState(assert,engine.messageState['1'].state,'awaitRevealSecret');
+        engine.onBlock(currentBlock.add(new util.BN(1)));
+        assertState(assert,engine.messageState['1'].state,'expiredTransfer');
 
+      }),
+      secretHashPair = message.GenerateRandomSecretHashPair();
 
       engine2.sendMediatedTransfer(
         pk_addr[0].address,
@@ -586,89 +625,349 @@ test('test engine', function(t){
         secretHashPair.hash,
       );
 
-      testEventBus.on('afterReceiving-10',function () {
+      assert.end();
 
-        assertChannelState(assert,
+      });
+
+  });
+
+ t.test('should emit GOT.closeChannel if a lock is open and the currentBlock <= lock.expiration + reveal_timeout',function (assert) {
+    var blockchainQueue = [];
+    var currentBlock = new util.BN(0);
+
+    var engine = createEngine(0);
+    var engine2 = createEngine(1);
+
+    engine.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
+    engine2.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
+
+    engine.onNewChannel(channelAddress,
+      pk_addr[0].address,
+      new util.BN(501),
+      pk_addr[1].address,
+      new util.BN(0));
+    engine2.onNewChannel(channelAddress,
+      pk_addr[0].address,
+      new util.BN(501),
+      pk_addr[1].address,
+      new util.BN(0))
+
+
+
+    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+
+
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+    assert.equals(engine.channelByPeer.hasOwnProperty(pk_addr[1].address.toString('hex')),true);
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    //END SETUP
+    var secretHashPair = message.GenerateRandomSecretHashPair();
+
+    var testEventBus = new TestEventBus();
+    testEventBus.addEngine(engine);
+    testEventBus.addEngine(engine2);
+    engine.sendMediatedTransfer(
+      pk_addr[1].address,
+      pk_addr[1].address,
+      new util.BN(50),
+      currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+      secretHashPair.secret,
+      secretHashPair.hash,
+      );
+    //MsgCount , engine(1) <-> engine(2)
+    //                START TRANSFER
+    //1 , MediatedTransfer ->
+    //2 ,                  <- RequestSecret
+    //3 , RevealSecret     ->
+    //4 ,                  <- RevealSecret
+    //5 , secretToProof    ->
+    //                COMPLETED TRANSFER
+
+     testEventBus.on('afterReceiving-4',function (msg) {
+      //we applied the revealSecret and secretToProof locally, now we are just waiting for other endpoint
+      //to sync
+      assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-      new util.BN(2),new util.BN(327),new util.BN(120),new util.BN(0),new util.BN(0),currentBlock);
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
 
       assertChannelState(assert,
       engine2,channelAddress,
-        new util.BN(2),new util.BN(327),new util.BN(120),new util.BN(0),new util.BN(0),
-        new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
-
-       var tt = engine.channels[channelAddress.toString('hex')];
-      console.log("ENGINE1 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
-      console.log("ENGINE1 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
-      tt = engine2.channels[channelAddress.toString('hex')];
-      console.log("ENGINE2 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
-      console.log("ENGINE2 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
-
-
-
-
-      testEventBus.on('afterReceiving-11',function (msg) {
-        console.log(msg);
-
-        assertChannelState(assert,
-      engine,channelAddress,
-      new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
-      new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),currentBlock);
-
-      assertChannelState(assert,
-      engine2,channelAddress,
-        new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),
-        new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
-
-
-      testEventBus.on('afterReceiving-12',function (msg) {
-        console.log(msg);
-
-        assertChannelState(assert,
-      engine,channelAddress,
-      new util.BN(3),new util.BN(501),new util.BN(671),new util.BN(0),new util.BN(0),
-      new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),currentBlock);
-
-      assertChannelState(assert,
-      engine2,channelAddress,
-        new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),
-        new util.BN(3),new util.BN(501),new util.BN(671),new util.BN(0),new util.BN(0),currentBlock);
-
-        var tt = engine.channels[channelAddress.toString('hex')];
-      console.log("ENGINE1 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
-      console.log("ENGINE1 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
-      tt = engine2.channels[channelAddress.toString('hex')];
-      console.log("ENGINE2 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
-      console.log("ENGINE2 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
-
-      assert.throws(function(){
-        try{
-          engine.sendDirectTransfer(pk_addr[1].address, new util.BN(722));
-        }catch(err){
-          assert.equals(err.message, "Insufficient funds: direct transfer cannot be completed:722 - 671 > 50")
-          throw new Error();
-        }});
-
-      });
-      engine.sendDirectTransfer(pk_addr[1].address, new util.BN(671));
-
-      });
-      engine2.sendDirectTransfer(pk_addr[0].address, new util.BN(100+120));
-
-
-      });
-
-
-
-
+        new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+        new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(50),currentBlock);
     });
-    assert.end();
-  })
+    testEventBus.on('afterReceiving-5',function () {
+      //One Secret Completed, Second Secret will timeout before reveal sent
+      assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
 
-  t.test('expired open lock causes channel to close');
+      assertChannelState(assert,
+      engine2,channelAddress,
+        new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+        new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+      testEventBus.on('afterReceiving-8',function (msg) {
+
+        // engine.onMessage(msg);
+        assertChannelState(assert,
+          engine,channelAddress,
+          new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+          new util.BN(1),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(120),currentBlock);
+
+
+        assertChannelState(assert,
+          engine2,channelAddress,
+            new util.BN(1),new util.BN(327),new util.BN(0),new util.BN(120),new util.BN(0),
+            new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+        assert.equals(msg.from.compare(engine2.address),0);
+        //==================================CORE OF THE TEST
+        //aftwer we apply the reveal secret, we are going to move currentBlock ahead and expire the transfer, this should not
+        //cause any blockchain events and further processing just moves one without failing
+        //cause the lock to timeout
+        assertState(assert,engine.messageState['1'].state,'awaitSecretToProof');
+        engine.onBlock(currentBlock.add(new util.BN(1)));
+        assertState(assert,engine.messageState['1'].state,'completedTransfer');
+
+        assert.equals(blockchainQueue.length, 2);
+        assert.equals(blockchainQueue[0][0],"CLOSE_CHANNEL", "first command should be close channel");
+        assertProof(assert,blockchainQueue[0][1],1,channelAddress,0,
+          engine.channels[channelAddress.toString('hex')].peerState.proof.locksRoot,engine2.address);
+
+        assert.equals(blockchainQueue[1][0],"WITHDRAW_LOCKS", "next we withdraw open locks");
+        //TODO: you may want to test the locks proof is still good
+        assert.equals(blockchainQueue[1][1].length, 1, "only a single lock proof is needed");
+        assert.equals(engine.channels[channelAddress.toString('hex')].isOpen(), false);
+
+
+        });
+
+      testEventBus.on('beforeReceiving-10',function (msg) {
+          this.byPass = true;
+          assert.throws(function () {
+            try{
+              engine.onMessage(msg)
+            }catch(err){
+              assert.equals(err.message, "Invalid transfer: cannot update a closing channel");
+              throw new Error();
+            }
+          },"applying message to closing channel throws error")
+          assert.end();
+      });
+
+      secretHashPair = message.GenerateRandomSecretHashPair();
+
+      engine2.sendMediatedTransfer(
+        pk_addr[0].address,
+        pk_addr[0].address,
+        new util.BN(120),
+        currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+        secretHashPair.secret,
+        secretHashPair.hash,
+      );
+
+
+      });
+
+  });
+
+
+  t.test('expired open lock causes channel to close event');
 
   t.test('blockchain events');
+
+  // t.test('lock expires on engine handleBlock',function (assert) {
+  //   var blockchainQueue = [];
+  //   var currentBlock = new util.BN(0);
+
+  //   var engine = createEngine(0);
+  //   var engine2 = createEngine(1);
+
+  //   engine.blockchain = function (msg)  {
+  //     blockchainQueue.push(msg);
+  //   }
+  //   engine2.blockchain = function (msg)  {
+  //     blockchainQueue.push(msg);
+  //   }
+
+  //   engine.onNewChannel(channelAddress,
+  //     pk_addr[0].address,
+  //     new util.BN(501),
+  //     pk_addr[1].address,
+  //     new util.BN(0));
+  //   engine2.onNewChannel(channelAddress,
+  //     pk_addr[0].address,
+  //     new util.BN(501),
+  //     pk_addr[1].address,
+  //     new util.BN(0))
+
+
+
+  //   engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+  //   engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+
+
+  //   assertChannelState(assert,
+  //     engine,channelAddress,
+  //     new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),
+  //     new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+  //   assert.equals(engine.channelByPeer.hasOwnProperty(pk_addr[1].address.toString('hex')),true);
+  //   assertChannelState(assert,
+  //   engine2,channelAddress,
+  //     new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+  //     new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+  //   //END SETUP
+  //   var secretHashPair = message.GenerateRandomSecretHashPair();
+
+  //   var testEventBus = new TestEventBus();
+  //   testEventBus.addEngine(engine);
+  //   testEventBus.addEngine(engine2);
+  //   engine.sendMediatedTransfer(
+  //     pk_addr[1].address,
+  //     pk_addr[1].address,
+  //     new util.BN(50),
+  //     currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+  //     secretHashPair.secret,
+  //     secretHashPair.hash,
+  //     );
+
+  //    testEventBus.on('afterReceiving-4',function (msg) {
+  //     //we applied the revealSecret and secretToProof locally, now we are just waiting for other endpoint
+  //     //to sync
+  //     assertChannelState(assert,
+  //     engine,channelAddress,
+  //     new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+  //     new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+  //     assertChannelState(assert,
+  //     engine2,channelAddress,
+  //       new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+  //       new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(50),currentBlock);
+  //   });
+  //   testEventBus.on('afterReceiving-5',function () {
+
+  //     assertChannelState(assert,
+  //     engine,channelAddress,
+  //     new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+  //     new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+  //     assertChannelState(assert,
+  //     engine2,channelAddress,
+  //       new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+  //       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+
+  //     var secretHashPair = message.GenerateRandomSecretHashPair();
+
+
+  //     engine2.sendMediatedTransfer(
+  //       pk_addr[0].address,
+  //       pk_addr[0].address,
+  //       new util.BN(120),
+  //       currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+  //       secretHashPair.secret,
+  //       secretHashPair.hash,
+  //     );
+
+  //     testEventBus.on('afterReceiving-10',function () {
+
+  //       assertChannelState(assert,
+  //     engine,channelAddress,
+  //     new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+  //     new util.BN(2),new util.BN(327),new util.BN(120),new util.BN(0),new util.BN(0),currentBlock);
+
+  //     assertChannelState(assert,
+  //     engine2,channelAddress,
+  //       new util.BN(2),new util.BN(327),new util.BN(120),new util.BN(0),new util.BN(0),
+  //       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+  //      var tt = engine.channels[channelAddress.toString('hex')];
+  //     console.log("ENGINE1 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
+  //     console.log("ENGINE1 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
+  //     tt = engine2.channels[channelAddress.toString('hex')];
+  //     console.log("ENGINE2 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
+  //     console.log("ENGINE2 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
+
+
+
+
+  //     testEventBus.on('afterReceiving-11',function (msg) {
+  //       console.log(msg);
+
+  //       assertChannelState(assert,
+  //     engine,channelAddress,
+  //     new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+  //     new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),currentBlock);
+
+  //     assertChannelState(assert,
+  //     engine2,channelAddress,
+  //       new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),
+  //       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+
+  //     testEventBus.on('afterReceiving-12',function (msg) {
+  //       console.log(msg);
+
+  //       assertChannelState(assert,
+  //     engine,channelAddress,
+  //     new util.BN(3),new util.BN(501),new util.BN(671),new util.BN(0),new util.BN(0),
+  //     new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),currentBlock);
+
+  //     assertChannelState(assert,
+  //     engine2,channelAddress,
+  //       new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),
+  //       new util.BN(3),new util.BN(501),new util.BN(671),new util.BN(0),new util.BN(0),currentBlock);
+
+  //       var tt = engine.channels[channelAddress.toString('hex')];
+  //     console.log("ENGINE1 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
+  //     console.log("ENGINE1 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
+  //     tt = engine2.channels[channelAddress.toString('hex')];
+  //     console.log("ENGINE2 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
+  //     console.log("ENGINE2 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
+
+  //     assert.throws(function(){
+  //       try{
+  //         engine.sendDirectTransfer(pk_addr[1].address, new util.BN(722));
+  //       }catch(err){
+  //         assert.equals(err.message, "Insufficient funds: direct transfer cannot be completed:722 - 671 > 50")
+  //         throw new Error();
+  //       }
+  //     });
+
+
+
+  //     });
+  //     engine.sendDirectTransfer(pk_addr[1].address, new util.BN(671));
+
+  //     });
+  //     engine2.sendDirectTransfer(pk_addr[0].address, new util.BN(100+120));
+
+
+  //     });
+
+
+
+
+  //   });
+  //   assert.end();
+  // })
+
+
 
 });
 
