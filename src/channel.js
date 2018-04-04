@@ -187,9 +187,9 @@ class Channel{
     }
 
     var transferrable = this.transferrableFromTo(from,to,currentBlock);
-    ;
+
     if(proof.transferredAmount.gt(transferrable)){
-      throw new Error("Invalid transferredAmount: Insufficient Balance:"+proof.transferredAmount.toString(10)+" > "+transferrable.toString(10));
+      throw new Error("Invalid transferredAmount: Insufficient Balance:"+proof.transferredAmount.toString()+" > "+transferrable.toString());
     }
 
     if(transfer instanceof message.LockedTransfer){
@@ -236,10 +236,10 @@ class Channel{
 
     if(transferredAmount.lte(new util.BN(0)) ||
      transferredAmount.lte(this.myState.transferredAmount) ||
-     transferredAmount.sub(this.myState.transferredAmount).gt(transferrable)){
+     transferredAmount.gt(transferrable)){
 
       throw new Error("Insufficient funds: direct transfer cannot be completed:"
-        + transferredAmount.toString(10)+" - "+this.myState.transferredAmount.toString(10) +" > "
+        + transferredAmount.toString()+" - "+this.myState.transferredAmount.toString() +" > "
         + transferrable.toString(10));
     }
 

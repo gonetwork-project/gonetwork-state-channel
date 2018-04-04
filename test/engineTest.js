@@ -212,11 +212,11 @@ test('test engine', function(t){
     //END SETUP
 
 
-    currentBlock = currentBlock.add(new util.BN(1));
+     currentBlock = currentBlock.add(new util.BN(1));
 
     //START  A DIRECT TRANSFER FROM ENGINE(0) to ENGINE(1)
 
-  assert.equals(sendQueue.length, 0, "send direct transfer");
+    assert.equals(sendQueue.length, 0, "send direct transfer");
     engine.sendDirectTransfer(pk_addr[1].address,new util.BN(50));
     //sent but not prcessed yet by engine(1) as expected
      assertChannelState(assert,
@@ -258,15 +258,17 @@ test('test engine', function(t){
 
 
     //engine2 has no more money left!
-    try{
+    assert.throws(function(){
+      try{
       engine2.sendDirectTransfer(pk_addr[0].address,new util.BN(377));
-    }catch(err){
-      //GOOD we caught it
-      assert.equals(err.message, "Insufficient funds: direct transfer cannot be completed:377 - 377 > 0")
-    }
+      }catch(err){
+        assert.equals(err.message, "Insufficient funds: direct transfer cannot be completed:377 - 377 > 0");
+        throw new Error();
+      }
+    },"Insufficient funds: direct transfer cannot be completed:377 - 377 > 0");
 
     assertChannelState(assert,
-      engine,channelAddress,
+    engine,channelAddress,
       new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
       new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
    assertChannelState(assert,
@@ -275,12 +277,14 @@ test('test engine', function(t){
       new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
 
     //now engine(0) tries to send more money then it has
-    try{
-      engine.sendDirectTransfer(pk_addr[1].address, new util.BN(501+328));
-    }catch(err){
-      //GOOD we caught it
-      assert.equals(err.message, "Invalid transferredAmount: Insufficient Balance:829 > 828")
-    }
+      assert.throws(function(){
+        try{
+          engine.sendDirectTransfer(pk_addr[1].address, new util.BN(879));
+        }catch(err){
+          assert.equals(err.message,"Insufficient funds: direct transfer cannot be completed:879 - 50 > 828" );
+          throw new Error();
+        }});
+
 
     assertChannelState(assert,
       engine,channelAddress,
@@ -292,19 +296,19 @@ test('test engine', function(t){
       new util.BN(1),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
 
 
-    engine.sendDirectTransfer(pk_addr[1].address, new util.BN(501+327));
+    engine.sendDirectTransfer(pk_addr[1].address, new util.BN(828));
     msg = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
-    assert.equals(sendQueue.length,4);
+    assert.equals(sendQueue.length,3);
     engine2.onMessage(msg);
 
      assertChannelState(assert,
       engine,channelAddress,
-      new util.BN(2),new util.BN(501),new util.BN(501+327),new util.BN(0),new util.BN(0),
+      new util.BN(2),new util.BN(501),new util.BN(828),new util.BN(0),new util.BN(0),
       new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),currentBlock);
    assertChannelState(assert,
       engine2,channelAddress,
       new util.BN(1),new util.BN(327),new util.BN(377),new util.BN(0),new util.BN(0),
-      new util.BN(2),new util.BN(501),new util.BN(501+327),new util.BN(0),new util.BN(0),currentBlock);
+      new util.BN(2),new util.BN(501),new util.BN(828),new util.BN(0),new util.BN(0),currentBlock);
 
    engine.closeChannel(channelAddress);
    console.log(engine.channels[channelAddress.toString('hex')].state);
@@ -617,6 +621,37 @@ test('test engine', function(t){
         new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),
         new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
 
+
+      testEventBus.on('afterReceiving-12',function (msg) {
+        console.log(msg);
+
+        assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(3),new util.BN(501),new util.BN(671),new util.BN(0),new util.BN(0),
+      new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),currentBlock);
+
+      assertChannelState(assert,
+      engine2,channelAddress,
+        new util.BN(3),new util.BN(327),new util.BN(220),new util.BN(0),new util.BN(0),
+        new util.BN(3),new util.BN(501),new util.BN(671),new util.BN(0),new util.BN(0),currentBlock);
+
+        var tt = engine.channels[channelAddress.toString('hex')];
+      console.log("ENGINE1 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
+      console.log("ENGINE1 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
+      tt = engine2.channels[channelAddress.toString('hex')];
+      console.log("ENGINE2 transfferrable my->peer",tt.transferrableFromTo(tt.myState,tt.peerState).toString(10));
+      console.log("ENGINE2 transfferrable peer->my",tt.transferrableFromTo(tt.peerState,tt.myState).toString(10));
+
+      assert.throws(function(){
+        try{
+          engine.sendDirectTransfer(pk_addr[1].address, new util.BN(722));
+        }catch(err){
+          assert.equals(err.message, "Insufficient funds: direct transfer cannot be completed:722 - 671 > 50")
+          throw new Error();
+        }});
+
+      });
+      engine.sendDirectTransfer(pk_addr[1].address, new util.BN(671));
 
       });
       engine2.sendDirectTransfer(pk_addr[0].address, new util.BN(100+120));
