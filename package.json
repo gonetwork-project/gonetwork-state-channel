@@ -16,21 +16,18 @@
   "author": "Amit Shah",
   "license": "GPL-3.0",
   "devDependencies": {
-    "ethereumjs": "https://github.com/ethereumjs/browser-builds",
     "babel-cli": "^6.26.0",
     "babel-core": "^6.26.0",
     "babel-preset-es2015": "^6.24.1",
     "browserify": "^15.2.0",
-    "http-server": "^0.11.1"
+    "http-server": "^0.11.1",
+    "tape": "^4.9.0",
+    "faucet": "0.0.1"
   },
   "dependencies": {
-    "detectrtc": "^1.3.5",
-    "sjcl": "^1.0.7",
+    "ethereumjs-abi": "*",
     "sjcl-all": "^1.0.1",
-    "web3": "^1.0.0-beta.29",
-    "webrtc-adapter": "^6.1.1",
-    "workerpool": "^2.3.0",
-    "wrtc": "0.0.65",
-    "ethereumjs-abi": "*"
+    "ethereumjs": "https://github.com/ethereumjs/browser-builds",
+    "machina": "^2.0.2"
   }
 }
