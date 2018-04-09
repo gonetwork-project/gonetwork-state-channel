@@ -5,17 +5,7 @@ const stateMachineLib = require('./stateMachine/stateMachine');
 const util = require('ethereumjs-util');
 const events = require('events');
 
-class MessageState{
-  constructor(state,stateMachine){
-    this.state = state;//message.*
-    this.stateMachine = stateMachine; //statemachine.*
-  }
 
-  applyMessage(stateChange,message){
-    this.stateMachine.handle(this.state,stateChange,message);
-  }
-
-}
 
 class Engine {
 
@@ -182,7 +172,7 @@ class Engine {
     channel.handleTransfer(mediatedTransfer,this.currentBlock);
     if(mediatedTransfer.target.compare(this.address)===0){
       console.log("Start targetStateMachine");
-      this.messageState[mediatedTransfer.msgID] = new MessageState(mediatedTransfer,this.targetStateMachine);
+      this.messageState[mediatedTransfer.msgID] = new stateMachineLib.MessageState(mediatedTransfer,this.targetStateMachine);
       this.messageState[mediatedTransfer.msgID].applyMessage('init',this.currentBlock);
     }
   }
@@ -210,7 +200,7 @@ class Engine {
       secret:secret,
       to:channel.peerState.address});
 
-    this.messageState[msgID] = new MessageState(mediatedTransferState,this.initiatorStateMachine);
+    this.messageState[msgID] = new stateMachineLib.MessageState(mediatedTransferState,this.initiatorStateMachine);
     this.messageState[msgID].applyMessage('init');
   }
 
@@ -446,7 +436,7 @@ class Engine {
 }
 
 module.exports = {
-  Engine,MessageState
+  Engine
 }
 
 

@@ -3,17 +3,20 @@ const message = require('../message');
 const channel = require('../channel');
 const util = require('ethereumjs-util');
 
+class MessageState{
+  constructor(state,stateMachine){
+    this.state = state;//message.*
+    this.stateMachine = stateMachine; //statemachine.*
+  }
+
+  applyMessage(stateChange,message){
+    this.stateMachine.handle(this.state,stateChange,message);
+  }
+
+}
+
 //State change can only occur after a mutating action has taken place upstream
 //the transitions merely emit further actions.
-
-//
-function validSecret(state,requestSecret){
-
-}
-
-function validRevealSecret(state,revealSecret){
-
-}
 class MediatedTransferState extends message.MediatedTransfer{
   constructor(options){
     super(options);
@@ -197,5 +200,5 @@ const TargetFactory = function(){ return new machina.BehavioralFsm( {
 };
 
 module.exports = {
-  InitiatorFactory,TargetFactory
+  MessageState,InitiatorFactory,TargetFactory
 }
