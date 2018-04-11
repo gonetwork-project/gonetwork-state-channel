@@ -2,7 +2,10 @@
   "name": "state-channel",
   "version": "1.0.0",
   "description": "browser based state channel for super fast off chain tx",
-  "main": "index.js",
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
   "scripts": {
     "browserify": "browserify src/index.js -o build/index.bundle.js",
     "babel": "babel --presets es2015 src/index.js -o build/index.bundle.js",
@@ -24,10 +27,13 @@
     "tape": "^4.9.0",
     "faucet": "0.0.1"
   },
-  "dependencies": {
+   "dependencies": {
     "ethereumjs-abi": "*",
-    "sjcl-all": "^1.0.1",
-    "ethereumjs": "https://github.com/ethereumjs/browser-builds",
-    "machina": "^2.0.2"
+    "ethereumjs-tx": "*",
+    "ethereumjs-util": "*",
+    "machina": "^2.0.2",
+    "rlp": "*",
+    "sjcl": "*",
+    "sjcl-all": "^1.0.1"
   }
 }
