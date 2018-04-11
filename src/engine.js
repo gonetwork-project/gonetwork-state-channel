@@ -3,7 +3,7 @@ const channelLib = require('./channel');
 const channelStateLib = require('./channelState');
 const stateMachineLib = require('./stateMachine/stateMachine');
 const util = require('ethereumjs-util');
-const events = require('events');
+
 
 
 
