@@ -32,6 +32,6 @@
     "ethereumjs-util": "*",
     "machina": "^2.0.2",
     "rlp": "*",
-    "sjcl": "*",
+    "sjcl": "*"
   }
 }
