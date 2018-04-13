@@ -107,7 +107,7 @@ class Engine {
 
     //encapsulate in message.RevealSecret type of message, we dont have to sign it
     //it is not required
-    var tempRevealSecret = new message.RevealSecret({secret:secretToProof.secret})
+    var tempRevealSecret = new messageLib.RevealSecret({secret:secretToProof.secret})
     this.signature(tempRevealSecret);
     Object.values(this.channelByPeer).map(function (channel) {
       try{
@@ -340,7 +340,7 @@ class Engine {
   }
 
   onLockWithdrawn(withrawLock){
-    var revealSecret = new message.RevealSecret({secret:withrawLock.secret});
+    var revealSecret = new messageLib.RevealSecret({secret:withrawLock.secret});
     //we dont need to sign this
     // this is if we are dependent on a reveal from one channel affecting another channel
     this.onRevealSecret(revealSecret);
@@ -386,7 +386,7 @@ class Engine {
             break;
           case 'GOT.sendRequestSecret':
             var channel = this.channelByPeer[state.to.toString('hex')];
-            var requestSecret = new message.RequestSecret({msgID:state.msgID,to:state.from,
+            var requestSecret = new messageLib.RequestSecret({msgID:state.msgID,to:state.from,
               hashLock:state.lock.hashLock,amount:state.lock.amount});
             this.signature(requestSecret);
             this.send(requestSecret);
@@ -396,7 +396,7 @@ class Engine {
             //technically, this workflow only works when target == to.  In mediated transfers
             //we need to act more generally and have the state machine tell us where we should
             //send this secret (backwards and forwards maybe)
-            var revealSecret = new message.RevealSecret({to:state.revealTo, secret:state.secret});
+            var revealSecret = new messageLib.RevealSecret({to:state.revealTo, secret:state.secret});
             this.signature(revealSecret);
             this.send(revealSecret);
             //we dont register the secret, we wait for the echo Reveal
