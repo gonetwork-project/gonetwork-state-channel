@@ -1,6 +1,5 @@
-const tx = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
-const sjcl = require('sjcl-all');
+const sjcl = require('sjcl');
 const rlp = require('rlp');
 const abi = require("ethereumjs-abi");
 

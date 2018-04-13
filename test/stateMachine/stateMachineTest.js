@@ -1,7 +1,7 @@
 var test = require('tape');
 var stateMachine = require('../../src/stateMachine/stateMachine');
 var message = require('../../src/message');
-var sjcl = require('sjcl-all');
+var sjcl = require('sjcl');
 var util = require('ethereumjs-util');
 var channel = require('../../src/channel');
 
