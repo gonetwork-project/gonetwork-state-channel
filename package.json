@@ -9,7 +9,7 @@
   "scripts": {
     "browserify": "browserify src/index.js -o build/index.bundle.js",
     "babel": "babel --presets es2015 src/index.js -o build/index.bundle.js",
-    "start": "http-server",
+    "start": "http-server"
   },
   "keywords": [
     "ethereum",
