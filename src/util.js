@@ -1,6 +1,6 @@
 const tx = require('ethereumjs-tx')
 const util = require('ethereumjs-util')
-const sjcl = require('sjcl-all');
+const sjcl = require('sjcl');
 const rlp = require('rlp');
 const abi = require("ethereumjs-abi");
 //https://github.com/ethereumjs/keythereum
@@ -108,8 +108,8 @@ function decodeTx(){
 function Transfer(options){
   this.className = "Transfer";
   this.channelId = options.channelId || null; //hexstring address
-  this.transfer_amount = options.transfer_amount || new util.BN(0); //BN
-  this.nonce = options.nonce || new util.BN(0); //BN
+  this.transfer_amount = new util.BN(options.transfer_amount) || new util.BN(0); //BN
+  this.nonce = new util.BN(options.nonce) || new util.BN(0); //BN
   if(!options.random_hash){
       options.random_hash = ((generateRandomHash()).hash).toString("hex");
   }
@@ -165,6 +165,8 @@ function LockTransfer(options){
 
   this.lock = options.lock;
   Object.defineProperty(this.lock, "secret", {enumerable:false});
+
+  this.timeout = options.timeout || new util.BN(10);
 }
 
 LockTransfer.prototype = Object.create(Transfer.prototype);
@@ -175,10 +177,11 @@ LockTransfer.prototype._super = Transfer;
 
 LockTransfer.prototype.getSignableHash = function(){
   var buffer =  abi.soliditySHA3(
-     [ "address", "uint256", "uint256", "bytes32","bytes32" ],
+     [ "address", "uint256", "uint256", "uint256","bytes32","bytes32" ],
      [ util.addHexPrefix(this.channelId),
       this.transfer_amount,
       this.nonce,
+      this.timeout,
       util.toBuffer(util.addHexPrefix(this.random_hash)),
       util.toBuffer(util.addHexPrefix(this.lock.hash))]);
   return buffer;
@@ -205,18 +208,23 @@ function AtomicSwapParticpate(lock_hash){
   //create contract where hash unlocks your funds
 }
 
+function concatBuffer(bufferA, bufferB){
+  return util.toBuffer(util.addHexPrefix(bufferA)) + util.toBuffer(util.addHexPrefix(bufferB));
+}
+
 var privateKey =  util.toBuffer('0xe331b6d69882b4cb4ea581d88e0b604039a3de5967688d3dcffdd2270c0fd109');
 var publicKey =util.privateToPublic(privateKey);
 var address = util.pubToAddress(publicKey);
 var channelAddress = address.toString("hex");
-var t = new Transfer({"from":address, transfer_amount:new util.BN(10), nonce: new util.BN(1),channelId:channelAddress });
+var t = new Transfer({"from":address, transfer_amount:10, nonce: 2,channelId:channelAddress });
 
 t.sign(privateKey);
 
 console.log(t.verify("0xbe862ad9abfe6f22bcb087716c7d89a26051f74c"));
 debugger;
-var lt = new LockTransfer({"from":address, transfer_amount:new util.BN(10), nonce: new util.BN(1),channelId:channelAddress });
+var lt = new LockTransfer({"from":address, transfer_amount:10, nonce: 1,channelId:channelAddress });
 lt.sign(privateKey);
 console.log(lt.verify("0xbe862ad9abfe6f22bcb087716c7d89a26051f74c"));
 console.log(util.sha3(lt.lock.secret).toString("hex") + ":" + lt.lock.hash.toString("hex"));
 //var l = new LockTransfer({"from":address, transfer_amount:new util.BN(10), nonce: new util.BN(1),channelId:channelAddress })
+document.body.innerHTML +="LT VERIFY: "+lt.verify("0xbe862ad9abfe6f22bcb087716c7d89a26051f74c")+"";
