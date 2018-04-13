@@ -786,10 +786,6 @@ test('test engine', function(t){
   });
 
 
-  t.test('expired open lock causes channel to close event');
-
-  t.test('blockchain events');
-
   // t.test('lock expires on engine handleBlock',function (assert) {
   //   var blockchainQueue = [];
   //   var currentBlock = new util.BN(0);

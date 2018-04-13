@@ -1,5 +1,7 @@
 const util = require('ethereumjs-util');
 util.Buffer = require('buffer').Buffer;
+
+//Thanks to ameen sols work to understand construction of merkle object
 // Expects elements to be Buffers of length 32
 // Empty string elements will be removed prior to the buffer check
 // by default, order is not preserved and we use Buffer.Compare order

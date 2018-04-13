@@ -10,7 +10,6 @@
     "browserify": "browserify src/index.js -o build/index.bundle.js",
     "babel": "babel --presets es2015 src/index.js -o build/index.bundle.js",
     "start": "http-server",
-    "postinstall": "git clone https://github.com/ethereumjs/browser-builds.git node_modules/ethereumjs;"
   },
   "keywords": [
     "ethereum",
@@ -34,6 +33,5 @@
     "machina": "^2.0.2",
     "rlp": "*",
     "sjcl": "*",
-    "sjcl-all": "^1.0.1"
   }
 }
