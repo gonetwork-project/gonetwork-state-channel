@@ -1552,4 +1552,83 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
   });
 
 
+  t.test('channel component test: mediated transfer can handle when lockedAmount transferred > remaining transferrable',function  (assert) {
+    setup(assert);
+    //NOTE: at a minimum the locks must be CURRENT_BLOCK+REVEAL_TIMEOUT in the future.
+    //We are better off creating Locks with expiration set to currentBlock + settleTimeout and
+    //not issuing the secret
+
+    //revealTimeout = 15
+    currentBlock = new util.BN(5);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+    testLocks[0].amount = new  util.BN(62)
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration, // currentBlock = 5
+      pk_addr[1].address,//target
+      pk_addr[0].address,//initiator
+      currentBlock);
+
+    //ensure the state wasnt updated when transfer was created
+    assertStateBN(assert,myState,0,123,0,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    assert.throws(function () {
+      mediatedtransfer.from;
+    }, "no signature to recover address from caught correctly");
+
+    mediatedtransfer.sign(pk_addr[0].pk);
+
+    //make sure mediated transfer was created properly
+    assertMediatedTransfer(
+      assert,mediatedtransfer,pk_addr[0].address,1,address,0,
+      testLocks[0].getMessageHash(),pk_addr[1].address,pk_addr[1].address,pk_addr[0].address);
+
+    //handle the signed transfer
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+
+    //ensure that appropriate state values updated: nonce+1, transferredAmount but nothing else
+    assertStateBN(assert,myState,1,123,0,62,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+       //lock right before expire (currentBlock + channel.REVEAL_TIMEOUT < expirtation ):: 5-1 + 15 < 20
+    var transferrable = channel.transferrableFromTo(channel.myState,channel.peerState,currentBlock.sub( new util.BN(1)));
+    assert.equals(transferrable.eq(new util.BN(61)),true,'correct transferrable amount from mystate');
+
+    transferrable = channel.transferrableFromTo(channel.myState,channel.peerState,currentBlock);
+    assert.equals(transferrable.eq(new util.BN(123)),true,'correct transferrable amount from mystate no block reveal');
+
+
+    transferrable = channel.transferrableFromTo(channel.peerState,channel.myState);
+    assert.equals(transferrable.eq(new util.BN(200)),true,'correct transferrable amount from peerstate');
+    assert.equals(myState.containsLock(testLocks[0]),true);
+
+
+    // console.log(channel.myState.pendingLocks);
+    // console.log(util.sha3(locks[0].secret));
+    currentBlock = currentBlock.add(new util.BN(1));
+    var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
+
+    channel.handleRevealSecret(secretReveal);
+    assert.equals(myState.containsLock(testLocks[0]),true);
+    assertStateBN(assert,myState,1,123,0,0,62,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    var secretToProof = channel.createSecretToProof(msgID,locks[0].secret);
+    secretToProof.sign(pk_addr[0].pk);
+    channel.handleTransfer(secretToProof);
+    assertStateBN(assert,myState,2,123,62,0,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+    assert.end();
+    teardown();
+  })
+
 });

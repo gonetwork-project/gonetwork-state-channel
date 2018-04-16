@@ -186,19 +186,22 @@ class Channel{
       throw new Error("Invalid transferredAmount: must be monotonically increasing value");
     }
 
+    var transferrable = this.transferrableFromTo(from,to,currentBlock);
     if(transfer instanceof message.SecretToProof){
       var lock = from.getLockFromSecret(transfer.secret);//returns null if lock is not present
       if(!lock || (proof.transferredAmount.lt(from.transferredAmount.add(lock.amount)))){
         throw new Error("Invalid transferredAmount: SecretToProof does not provide expected lock amount");
       };
+      //because we are removing the lock and adding it to transferred amount, we have access to the remaining funds
+      //IMPORTANT CHECK, or else if we sent a lock transfer greater then our remaining balance, we could never unlock with a secret proof
+      transferrable = transferrable.add(lock.amount);
     }
-
-
-    var transferrable = this.transferrableFromTo(from,to,currentBlock);
 
     if(proof.transferredAmount.gt(transferrable)){
-      throw new Error("Invalid transferredAmount: Insufficient Balance:"+proof.transferredAmount.toString()+" > "+transferrable.toString());
+        throw new Error("Invalid transferredAmount: Insufficient Balance:"+proof.transferredAmount.toString()+" > "+transferrable.toString());
     }
+
+   
 
     if(transfer instanceof message.LockedTransfer){
       from.applyLockedTransfer(transfer);
