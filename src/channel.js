@@ -196,8 +196,9 @@ class Channel{
       //IMPORTANT CHECK, or else if we sent a lock transfer greater then our remaining balance, we could never unlock with a secret proof
       transferrable = transferrable.add(lock.amount);
     }
-
-    if(proof.transferredAmount.gt(transferrable)){
+    //fix
+    //if the sent delta between messages is greater than the total transferrable amount (i.e. net value flux)
+    if(proof.transferredAmount.sub(from.transferredAmount).gt(transferrable)){
         throw new Error("Invalid transferredAmount: Insufficient Balance:"+proof.transferredAmount.toString()+" > "+transferrable.toString());
     }
 
