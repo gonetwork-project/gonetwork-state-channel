@@ -9,42 +9,16 @@
 </head>
 
 <body>
-  <!--div class="hidden" data-quiet-profile-name="audible"></div>
-    <div class="wrapper">
-      <header>
-        <h1>Send Text</h1>
-      </header>
-      <section>
-      <div class="hidden" data-quiet-warning></div>
-      <div class="form-group">
-        <textarea autofocus="true" autocapitalize="none" autocomplete="off" spellcheck="off" class="form-control" style="resize:none" rows="5" data-quiet-text-input></textarea>
-      </div>
-      <button type="button" class="btn btn-default" style="width:100%" data-quiet-send-button data-quiet-sending-text="Sending...">Send</button>
-      </section>
-    </div>
-
-    <div class="hidden" data-quiet-profile-name="audible"></div>
-    <div class="wrapper">
-      <header>
-        <h1>Receive Text</h1>
-      </header>
-      <section>
-      <div class="hidden" data-quiet-warning></div>
-      <pre data-quiet-receive-text-target>Your received text will show up here. Waiting...</pre>
-      </section>
-    </div-->
-  <!--script type="text/javascript" src="/build/quiet.js"></script-->
-  <!--script async type="text/javascript" src="/build/quiet-emscripten.js"></script-->
-  <script src="/build/index.bundle.js"></script>
+  
   <script type="text/javascript" src="/src/connectionManager.js"></script>
   <script type="text/javascript">
 
-    //window.cm = new ConnectionManager("ws://10.0.9.161:8088");
+    window.cm = new ConnectionManager("ws://10.0.9.161:8088");
 
   </script>
 
 
-  <!--script type="text/javascript">
+  <script type="text/javascript">
     var TextTransmitter = (function() {
       Quiet.init({
           profilesPrefix: "/",
@@ -100,9 +74,9 @@
 
       document.addEventListener("DOMContentLoaded", onDOMLoad);
   })();
-  </script-->
+  </script>
 
-  <!--script type="text/javascript">
+  <script type="text/javascript">
     var TextReceiver = (function() {
         Quiet.init({
             profilesPrefix: "/",
@@ -153,7 +127,7 @@
 
         document.addEventListener("DOMContentLoaded", onDOMLoad);
     })();
-  </script-->
+  </script>
 
 </body>
 </html>
