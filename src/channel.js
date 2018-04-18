@@ -1,3 +1,10 @@
+/*
+* @Author: amitshah
+* @Date:   2018-04-17 01:15:31
+* @Last Modified by:   amitshah
+* @Last Modified time: 2018-04-18 00:48:03
+*/
+
 const message = require('./message');
 const channelState = require('./channelState');
 const util = require('ethereumjs-util');

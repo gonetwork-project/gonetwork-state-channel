@@ -1,3 +1,12 @@
+/*
+* @Author: amitshah
+* @Date:   2018-04-13 15:17:02
+* @Last Modified by:   amitshah
+* @Last Modified time: 2018-04-18 00:54:05
+*/
+
+/* A special thanks to blog posts by ameensol and raiden-network team for showing us all how merkle proofs can work */ 
+
 const util = require('ethereumjs-util');
 util.Buffer = require('buffer').Buffer;
 

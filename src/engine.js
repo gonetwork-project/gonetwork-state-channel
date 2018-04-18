@@ -1,3 +1,10 @@
+/*
+* @Author: amitshah
+* @Date:   2018-04-17 00:55:47
+* @Last Modified by:   amitshah
+* @Last Modified time: 2018-04-18 00:54:01
+*/
+
 const messageLib = require('./message');
 const channelLib = require('./channel');
 const channelStateLib = require('./channelState');
@@ -414,6 +421,10 @@ class Engine {
             this.signature(secretToProof)
 
             this.send(secretToProof);
+            //TODO: in the future, wait to apply secret to proof locally. We basically locked the state up now
+            //It makes sense, in a sense.  With this implementation, when a lock secret is revealed and echoed back
+            // the peer MUST accept a valid SecretToProof or no more new transfers can take place as the states are unsynced
+            //By having the peer echo back, we dont really do much difference, the state is simplex
             channel.handleTransfer(secretToProof);
             break;
           case 'GOT.closeChannel':

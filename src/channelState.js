@@ -1,3 +1,10 @@
+/*
+* @Author: amitshah
+* @Date:   2018-04-13 15:16:52
+* @Last Modified by:   amitshah
+* @Last Modified time: 2018-04-18 00:48:10
+*/
+
 const merkletree = require('./merkletree');
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl');

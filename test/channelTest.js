@@ -1,3 +1,9 @@
+/*
+* @Author: amitshah
+* @Date:   2018-04-16 18:03:32
+* @Last Modified by:   amitshah
+* @Last Modified time: 2018-04-18 00:54:14
+*/
 var test = require('tape');
 var merkleTree = require('../src/MerkleTree');
 var channelState = require('../src/ChannelState');

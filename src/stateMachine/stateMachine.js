@@ -1,3 +1,10 @@
+/*
+* @Author: amitshah
+* @Date:   2018-04-09 12:58:48
+* @Last Modified by:   amitshah
+* @Last Modified time: 2018-04-18 00:53:10
+*/
+
 const machina = require('machina');
 const message = require('../message');
 const channel = require('../channel');
