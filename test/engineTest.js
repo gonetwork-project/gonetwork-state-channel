@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:27:58
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-18 00:47:54
+* @Last Modified time: 2018-04-19 15:56:53
 */
 
 test = require('tape');
@@ -628,6 +628,155 @@ test('test engine', function(t){
         pk_addr[0].address,
         new util.BN(120),
         currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+        secretHashPair.secret,
+        secretHashPair.hash,
+      );
+
+      assert.end();
+
+      });
+
+  });
+
+
+t.test('multiple unopened locks expire on engine handleBlock',function (assert) {
+    var blockchainQueue = [];
+    var currentBlock = new util.BN(0);
+
+    var engine = createEngine(0);
+    var engine2 = createEngine(1);
+
+    engine.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
+    engine2.blockchain = function (msg)  {
+      blockchainQueue.push(msg);
+    }
+
+    engine.onNewChannel(channelAddress,
+      pk_addr[0].address,
+      new util.BN(501),
+      pk_addr[1].address,
+      new util.BN(0));
+    engine2.onNewChannel(channelAddress,
+      pk_addr[0].address,
+      new util.BN(501),
+      pk_addr[1].address,
+      new util.BN(0))
+
+
+
+    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+
+
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+    assert.equals(engine.channelByPeer.hasOwnProperty(pk_addr[1].address.toString('hex')),true);
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    //END SETUP
+    var secretHashPair = message.GenerateRandomSecretHashPair();
+
+    var testEventBus = new TestEventBus();
+    testEventBus.addEngine(engine);
+    testEventBus.addEngine(engine2);
+    engine.sendMediatedTransfer(
+      pk_addr[1].address,
+      pk_addr[1].address,
+      new util.BN(50),
+      currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+      secretHashPair.secret,
+      secretHashPair.hash,
+      );
+    //MsgCount , engine(1) <-> engine(2)
+    //                START TRANSFER
+    //1 , MediatedTransfer ->
+    //2 ,                  <- RequestSecret
+    //3 , RevealSecret     ->
+    //4 ,                  <- RevealSecret
+    //5 , secretToProof    ->
+    //                COMPLETED TRANSFER
+
+     testEventBus.on('afterReceiving-4',function (msg) {
+      //we applied the revealSecret and secretToProof locally, now we are just waiting for other endpoint
+      //to sync
+      assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+      assertChannelState(assert,
+      engine2,channelAddress,
+        new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+        new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(50),currentBlock);
+    });
+    testEventBus.on('afterReceiving-5',function () {
+      //One Secret Completed, Second Secret will timeout before reveal sent
+
+
+      assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+      assertChannelState(assert,
+      engine2,channelAddress,
+        new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+        new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+
+
+      testEventBus.on('beforeReceiving-10',function (msg) {
+        //before we apply the reveal secret, we are going to move this ahead and expire the transfer, this should not
+        //cause any blockchain events and further processing just moves one without failing
+        
+
+        assert.equals(msg.from.compare(engine2.address),0);
+        //we dont want to send this message, but instead we want to
+        //cause the lock to timeout
+        //ACTUAL TEST:  no blockchain messages are triggered because of these expired blocks as they were not OPEN
+        assert.equals(blockchainQueue.length,0);
+      
+        assertState(assert,engine.messageState['1'].state,'awaitRevealSecret');
+        assertState(assert,engine.messageState['2'].state,'awaitRevealSecret');
+        engine.onBlock(currentBlock.add(new util.BN(1)));
+        assert.equals(blockchainQueue.length,0);
+      
+        assertState(assert,engine.messageState['1'].state,'expiredTransfer');
+        assertState(assert,engine.messageState['2'].state,'awaitRevealSecret');
+        
+        assert.equals(blockchainQueue.length,0);  
+
+        engine.onBlock(currentBlock.add(new util.BN(5)));
+        assertState(assert,engine.messageState['1'].state,'expiredTransfer');        
+        assertState(assert,engine.messageState['2'].state,'expiredTransfer');
+        assert.equals(blockchainQueue.length,0, "No Blockchain Messages generated as none of the locks are open");
+
+      }),
+      secretHashPair = message.GenerateRandomSecretHashPair();
+
+      engine2.sendMediatedTransfer(
+        pk_addr[0].address,
+        pk_addr[0].address,
+        new util.BN(50),
+        currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+        secretHashPair.secret,
+        secretHashPair.hash,
+      );
+
+      secretHashPair = message.GenerateRandomSecretHashPair();
+
+      engine2.sendMediatedTransfer(
+        pk_addr[0].address,
+        pk_addr[0].address,
+        new util.BN(27),
+        currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(5)),
         secretHashPair.secret,
         secretHashPair.hash,
       );
