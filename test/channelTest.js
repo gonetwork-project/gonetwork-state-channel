@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-16 18:03:32
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-18 00:54:14
+* @Last Modified time: 2018-04-24 01:05:33
 */
 var test = require('tape');
 var merkleTree = require('../src/MerkleTree');
@@ -943,6 +943,8 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     teardown();
   })
 
+  //START BLOCK CHAIN TESTS
+
   t.test('channel component test: mediated transfer should not accept unknown signed proof',function  (assert) {
     setup(assert);
     currentBlock = new util.BN(10);
@@ -992,87 +994,21 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     assertStateBN(assert,myState, 0,123,0,0,0,currentBlock);
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
     try{
-      channel.handleDeposit(myState.address, new util.BN(12));
+      channel.onChannelNewBalance(myState.address, new util.BN(12));
     }catch(err){
       assert.equals(err.message, "Invalid Deposit Amount: deposit must be monotonically increasing");
     }
     assertStateBN(assert,myState, 0,123,0,0,0,currentBlock);
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
-    channel.handleDeposit(myState.address, new util.BN(129));
+    channel.onChannelNewBalance(myState.address, new util.BN(129));
     assertStateBN(assert,myState, 0,129,0,0,0,currentBlock);
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
-    channel.handleDeposit(peerState.address, new util.BN(209));
+    channel.onChannelNewBalance(peerState.address, new util.BN(209));
     assertStateBN(assert,myState, 0,129,0,0,0,currentBlock);
     assertStateBN(assert,peerState,0,209,0,0,0,currentBlock);
     assert.end();
 
   })
-
-
-  // t.test('channel handle lock withdrawals',function  (assert) {
-  //   setup(assert);
-  //   currentBlock = new util.BN(10);
-  //   var msgID = new util.BN(0);
-  //   var transferredAmount = new util.BN(10);
-  //   //SETUP Phoney State
-  //   var openLocks = {};
-  //   openLocks[testLocks[0].hashLock.toString('hex')] = testLocks[0];
-  //   openLocks[testLocks[0].hashLock.toString('hex')].secret  = locks[0].secret;
-  //   openLocks[testLocks[1].hashLock.toString('hex')] = testLocks[1];
-  //   openLocks[testLocks[1].hashLock.toString('hex')].secret  = locks[1].secret;
-
-  //   var testMT = computeMerkleTree(testLocks.slice(0,2));
-  //   myState.proof = {
-  //     nonce:new util.BN(17),
-
-  //     transferredAmount:new util.BN(0),
-
-  //     locksRoot :testMT.getRoot()
-  //   };
-  //   myState.depositBalance= new util.BN(2313),
-  //   myState.openLocks = openLocks;
-  //   myState.merkleTree = testMT;
-
-
-  //   assertStateBN(assert,myState,17,2313,0,0,30,currentBlock);
-  //   assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
-
-  //   var withdrawLocks = channel._withdrawPeerOpenLocks();
-  //   assert.equals(withdrawLocks.length,0);
-  //   console.log(peerChannel.peerState.openLocks);
-  //   withdrawLocks = peerChannel._withdrawPeerOpenLocks();
-  //   assert.equals(withdrawLocks.length,2);
-
-  //   withdrawLocks.map(function (l) {
-  //     var lock = l[0];
-  //     var proof = l[1];
-  //     console.log("L:"+JSON.stringify(l));
-  //     assert.true(merkleTree.checkMerkleProof(proof,testMT.getRoot(), lock.getMessageHash()));
-  //   })
-
-  //   console.log("// Remix browser has a bunch of issues accepting bytes as input,\r\n"+
-  //   "// but verified that the elementHash + proof element sums to root when\r\n"+
-  //   "// size of proof == 1\r\n"+
-  //   "// function checkElements(string stringHash,string stringEl) public view returns(bytes32){\r\n"+
-  //   "//   bytes32  h = toBytes32(hexStrToBytes(stringHash),0);\r\n"+
-  //   "//   bytes32 el = toBytes32(hexStrToBytes(stringEl),0);\r\n"+
-
-  //   "//   if (h < el) {\r\n"+
-  //   "//         return keccak256(h, el);\r\n"+
-  //   "//     } else {\r\n"+
-  //   "//         return keccak256(el, h);\r\n"+
-  //   "//     }\r\n"+
-  //   "// }\r\n\r\n"+
-  //   "// console.log('encoded lock:'+withdrawLocks[0][0].encode().toString('hex'));\r\n"+
-  //   "// withdrawLocks[0][1].map(function(p){\r\n"+
-  //   "//   console.log('proof:'+p.toString('hex'));\r\n"+
-  //   "// })"+
-  //   "// console.log('root:'+testMT.getRoot().toString('hex'));");
-
-  //   assert.end();
-  //   teardown();
-
-  // });
 
   t.test('MANUAL TEST: channel can prove lock in solidity',function  (assert) {
     setup(assert);
@@ -1168,7 +1104,7 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     assert.equals(peerChannel.isOpen(), true);
-    assert.equals(peerChannel.updatedProof, false);
+    assert.equals(peerChannel.updatedProofBlock, null);
 
     console.log(peerChannel._withdrawPeerOpenLocks());
 
@@ -1283,15 +1219,16 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
 
     assert.equals(peerChannel.isOpen(), true);
-    assert.equals(peerChannel.updatedProof, false);
+    assert.equals(peerChannel.updatedProofBlock, null);
 
     //MAIN PART OF TEST
-    peerChannel.handleClose(currentBlock);
+    var proof = peerChannel.issueClose(currentBlock);
+
     var testMT = new merkleTree.MerkleTree(testLocks.slice(0,2).map(function (l)  {
       return l.getMessageHash();
     }));
     testMT.generateHashTree();
-    console.log(bcReq[1]);
+    var openLockProofs = channel.issueWithdrawPeerOpenLocks(currentBlock);
     var expectedLockProofs = [
     ["0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000014b8c5926ff513010d19bc9c549d21e8514c5577ef228eff65e3b6bc29a0e25ad25345435245543100000000000000000000000000000000000000000000000000",
     "0x508f0f548b4306ecff5e60b641479a8645cfce137ceddf6e9afe43e38412c31a",
@@ -1301,29 +1238,35 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     "0x0eeee20f167e07ba2f3e0e3c122add49c06ab4f3a8df2a2e3b9e895f07f80e8f",
     "0xd4194160804ec927608381e350dac6adb02f2ee3270ca63b62ccae0e8a990420"
     ]];
-    for(var i = 0; i < (bcReq[1][1]).length; i++){
-      var ll = bcReq[1][1][i];
+    for(var i = 0; i < openLockProofs; i++){
+      var ll = openLockProofs[i];
       console.log(ll);
       printProof(ll[0],ll[1],testMT.getRoot());
       assertLockProofString(ll[0],ll[1],testMT.getRoot(),expectedLockProofs[i][0],expectedLockProofs[i][1],expectedLockProofs[i][2]);
     }
     //assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from
-    assertProof(assert,bcReq[0][1], new util.BN(2), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
-    assert.equals(peerChannel.isOpen(),false, "channel still open after handleClose as expected until BC confirms");
-    assert.equals(peerChannel.updatedProof, true, "updatedProof set");
-    bcReq =[];
-    peerChannel.handleClose(currentBlock);
-    assert.equals(bcReq.length,0, "no more requests needed to be sent to blockchain");
+    
+
+    assertProof(assert,proof, new util.BN(2), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
+    assert.equals(peerChannel.isOpen(),false, "channel is closed after issuing a close block even if its not mined yet");
+    assert.equals(peerChannel.issuedCloseBlock.eq(currentBlock), true, "issued close block");
+    assert.equals(peerChannel.updatedProofBlock, null, "updatedProof should not be set");
+    assert.equals(peerChannel.closedBlock,null, "close block not set");
+    
+
+    currentBlock = currentBlock.add(new util.BN(10));
+    peerChannel.onChannelClose(peerChannel.address,currentBlock);
+    assert.equals(peerChannel.isOpen(),false, "channel is closed after issuing a close block even if its not mined yet");
+    assert.equals(peerChannel.issuedCloseBlock.eq(new util.BN(6)), true, "issued close block");
+    assert.equals(peerChannel.updatedProofBlock,null, "updatedProof should not be set");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(16)),true, "close block set");
+    
     assert.end();
   })
 
   t.test('channel can call handleClose again in case of blockChain error',function (assert) {
    setup(assert);
-    var bcReq = [];
-    peerChannel.blockchain = function (req){
-        throw new Error("FAKE BLOCKCHIAN ERROR");
-
-    };
+    
     //revealTimeout = 15
     currentBlock = new util.BN(5);
     //create direct transfer from channel
@@ -1358,55 +1301,183 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     assertStateBN(assert,myState,1,123,0,0,10,currentBlock);
 
     assert.equals(peerChannel.isOpen(), true);
-    assert.equals(peerChannel.updatedProof, false);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock, null);
+    assert.equals(peerChannel.closedBlock, null);
 
     //MAIN PART OF TEST
-    try{
-      peerChannel.handleClose(currentBlock);
-    }catch(err){
-      assert.equals(err.message, "FAKE BLOCKCHIAN ERROR");
-      peerChannel.blockchain =
-       function (req){
-          bcReq.push(req);
-
-      };
-
-    }
+    var proof1 = peerChannel.issueClose(currentBlock);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock.eq(currentBlock), true, "issued close block");
+    assert.equals(peerChannel.closedBlock, null);
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
+      
+    //blockchain returns an error, oh i dunno lets say due to out of gax exception
+    peerChannel.onChannelCloseError(peerChannel.address,currentBlock)
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock,null, "can reissue close block after error");
+    assert.equals(peerChannel.closedBlock, null);
     assert.equals(peerChannel.isOpen(), true);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_OPEN);
-    assert.equals(peerChannel.updatedProof, false);
-    assert.equals(bcReq.length,0);
 
     //call again, this time successul
-    peerChannel.handleClose(currentBlock);
+    var proof2 = peerChannel.issueClose(currentBlock);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock.eq(currentBlock), true, "issued close block");
+    assert.equals(peerChannel.closedBlock, null);
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    peerChannel.onChannelClose(peerChannel.address,currentBlock)
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock.eq(new util.BN(6)),true, "can reissue close block after error");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(7)),true, "closed block tracked correctly");
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+
+
+    
     var testMT = new merkleTree.MerkleTree(testLocks.slice(0,1).map(function (l)  {
       return l.getMessageHash();
     }));
     testMT.generateHashTree();
-    //assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from
-    assertProof(assert,bcReq[0][1], new util.BN(1), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
-    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
-    assert.equals(peerChannel.isOpen(),false, "channel still open after handleClose as expected until BC confirms");
-    assert.equals(peerChannel.updatedProof, true, "updatedProof set");
-    bcReq =[];
-    peerChannel.handleClose(currentBlock);
-    assert.equals(bcReq.length,0, "no more requests needed to be sent to blockchain");
+    
+    assertProof(assert,proof1, new util.BN(1), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
+    assertProof(assert,proof2, new util.BN(1), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
+    
+    currentBlock = currentBlock.add(new util.BN(4));
+    try{
+      peerChannel.issueClose(currentBlock);
+    }catch(err){
+      assert.equals(err.message, "Channel Error: Already Closed",true, "cant issue closed on closed channel")
+    }
+
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock.eq(new util.BN(6)),true, "can reissue close block after error");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(7)),true, "closed block tracked correctly");
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.end();
   })
 
-  t.test('channel can transition through blockChain close and settlement; settle can only be issued SETTLE_TIMEOUT even if handleSettle issued multipleTimes',function(assert){
-    setup(assert);
-    var bcReq = [];
-    peerChannel.blockchain = function (req){
-        throw new Error("FAKE BLOCKCHIAN ERROR");
+t.test('channel can call transferUpdate after on chain close initiated by partner',function (assert) {
+   setup(assert);
+    
+    //revealTimeout = 15
+    currentBlock = new util.BN(5);
+    //create direct transfer from channel
+    var msgID = new util.BN(0);
+    var transferredAmount = new util.BN(10);
+    //(msgID,hashLock,amount,expiration,target)
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+    assertStateBN(assert,myState,0,123,0,0,0,currentBlock);
 
-    };
-    peerChannel.blockchain = function (req){
-        bcReq.push(req);
-      }
-    channel.blockchain = function (req){
-        bcReq.push(req);
-      }
+    var mediatedtransfer = channel.createMediatedTransfer(
+      msgID,
+      testLocks[0].hashLock,
+      testLocks[0].amount,
+      testLocks[0].expiration,
+      pk_addr[1].address,
+      pk_addr[0].address,
+      currentBlock);
+    mediatedtransfer.sign(pk_addr[0].pk);
+
+    channel.handleTransfer(mediatedtransfer,currentBlock);
+     assertStateBN(assert,myState,1,123,0,10,0,currentBlock);
+    assertStateBN(assert,peerState,0,200,0,0,0,currentBlock);
+
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    var secretReveal = createRevealSecret(pk_addr[0].address,locks[0].secret);
+    secretReveal.sign(pk_addr[0].pk);
+
+    channel.handleRevealSecret(secretReveal);
+
+    assert.equals(myState.containsLock(testLocks[0]),true);
+    assertStateBN(assert,myState,1,123,0,0,10,currentBlock);
+
+    assert.equals(peerChannel.isOpen(), true);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock, null);
+    assert.equals(peerChannel.closedBlock, null);
+
+    //MAIN PART OF TEST
+    var proof1 = peerChannel.onChannelClose(channel.channelAddress,currentBlock);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock,null, "issued close block");
+    assert.equals(peerChannel.issuedTransferUpdateBlock,null, "issued close block");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(6)),true, "blockchain closed this");
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+
+
+    //trying to issue multiple inflight closes will error
+    try{
+    var proof = peerChannel.issueClose(currentBlock)
+    }catch(err){
+      assert.equal(err.message, "Channel Error: Already Closed", "cannot issue close after close has already been called");
+    }
+    currentBlock = currentBlock.add(new util.BN(1));
+
+    var proof1 = peerChannel.issueTransferUpdate(currentBlock);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock,null, "can reissue close block after error");
+    assert.equals(peerChannel.issuedTransferUpdateBlock.eq(new util.BN(7)),true, "issued transfer update");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(6)),true);
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+
+    
+    //blockchain returns an error, oh i dunno lets say due to out of gax exception
+    peerChannel.onTransferUpdatedError(peerChannel.address,currentBlock)
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock,null, "can reissue close block after error");
+    assert.equals(peerChannel.issuedTransferUpdateBlock,null, "issued transfer update");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(6)),true);
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    var proof2 = peerChannel.issueTransferUpdate(currentBlock);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.issuedCloseBlock,null, "can reissue close block after error");
+    assert.equals(peerChannel.issuedTransferUpdateBlock.eq(new util.BN(8)),true, "issued transfer update");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(6)),true);
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+
+    currentBlock = currentBlock.add(new util.BN(1));
+    peerChannel.onTransferUpdated(peerChannel.addresss, currentBlock);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(9)),true);
+    assert.equals(peerChannel.issuedCloseBlock,null, "can reissue close block after error");
+    assert.equals(peerChannel.issuedTransferUpdateBlock.eq(new util.BN(8)),true, "issued transfer update");
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(6)),true);
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+
+    
+    var testMT = new merkleTree.MerkleTree(testLocks.slice(0,1).map(function (l)  {
+      return l.getMessageHash();
+    }));
+    testMT.generateHashTree();
+    
+    assertProof(assert,proof1, new util.BN(1), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
+    assertProof(assert,proof2, new util.BN(1), channel.channelAddress, new util.BN(0), testMT.getRoot(), pk_addr[0].address )
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+    assert.equals(peerChannel.isOpen(),false, "channel still open after handleClose as expected until BC confirms");
+    assert.end();
+  })
+
+//calling issueClose multiple times causes errors
+//onBlock will case IssueSettle Event
+
+
+  t.test('channel can transition through out-of-order blockChain close and settlement; settle can only be issued SETTLE_TIMEOUT even if handleSettle issued multipleTimes',function(assert){
+    setup(assert);
+    
 
     //revealTimeout = 15
     currentBlock = new util.BN(5);
@@ -1419,139 +1490,184 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
 
     assert.equals(channel.isOpen(), true);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_OPEN);
-    assert.equals(channel.updatedProof, false);
-    assert.equals(bcReq.length,0);
+    assert.equals(channel.updatedProofBlock,null);
+
     assert.equals(peerChannel.isOpen(), true);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_OPEN);
-    assert.equals(peerChannel.updatedProof, false);
-    assert.equals(bcReq.length,0);
-
+    assert.equals(peerChannel.updatedProofBlock,null);
+    
     //issue close to blockchain
-    channel.handleClose(currentBlock);
+    var proof = channel.issueClose(currentBlock);
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.updatedProofBlock, null);
+
     assert.equals(peerChannel.isOpen(), true);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_OPEN);
-    assert.equals(peerChannel.updatedProof, false);
-    assert.equals(bcReq.length,2);
+    assert.equals(peerChannel.updatedProofBlock, null);
+    
 
 
 
     //peer receives close event from blockchain
     currentBlock  = currentBlock.add(new util.BN(3));
-    peerChannel.handleClosed(currentBlock);
+    
+    peerChannel.onChannelClose(channel.address,currentBlock);
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.updatedProofBlock, null);
+    
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(peerChannel.updatedProof, true);
-    assert.equals(bcReq.length,4);
-    console.log(bcReq);
+    assert.equals(peerChannel.updatedProofBlock,null);
 
     //this should fail to set settled or issue a command, as SETTLE_TIMEOUT hasnt passed
-    peerChannel.handleSettle(currentBlock)
+    assert.equals(peerChannel.issueSettle(currentBlock), null);
+
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.updatedProofBlock, null);
+
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(peerChannel.updatedProof, true);
-    assert.equals(bcReq.length,4);
+    assert.equals(peerChannel.updatedProofBlock,null);
+    
+
+    currentBlock  = currentBlock.add(new util.BN(3));
+    peerChannel.onTransferUpdated(peerChannel.address,currentBlock)
+
+
+    assert.equals(channel.isOpen(), false);
+    assert.equals(channel.state, channelLib.CHANNEL_STATE_IS_CLOSING);
+    assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
+    assert.equals(channel.updatedProofBlock, null);
+
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(11)),true);
 
     //close initiating channel sees mined block; both would see the same close block
-    channel.handleClosed(currentBlock)
+    currentBlock  = currentBlock.add(new util.BN(2));    
+    channel.onChannelClose(channel.address,new util.BN(9));
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
-    assert.equals(channel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
+    assert.equals(channel.updatedProofBlock,null);
+    
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+    assert.equals(peerChannel.issuedCloseBlock,null);
     assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(peerChannel.updatedProof, true);
-    assert.equals(bcReq.length,4);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(11)), true);
+    
 
+   
     //this should fail to set settled or issue a command, as SETTLE_TIMEOUT hasnt passed
     currentBlock  = currentBlock.add(new util.BN(3));
-    channel.handleSettle(currentBlock)
+    channel.issueSettle(currentBlock)
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
     assert.equals(channel.issuedSettleBlock,null);
-    assert.equals(channel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
+    assert.equals(channel.updatedProofBlock, null);
+
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
     assert.equals(peerChannel.issuedSettleBlock,null);
-    assert.equals(peerChannel.updatedProof, true);
-    assert.equals(bcReq.length,4);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(11)), true);
 
     //SETTLE_TIMEOUT has passed from closedBlock
-    currentBlock = SETTLE_TIMEOUT.add(new util.BN(9));
+    currentBlock = SETTLE_TIMEOUT.add(new util.BN(10));
     //channel can successfully send, so can peer
-    channel.handleSettle(currentBlock);
+    channel.issueSettle(currentBlock);
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_IS_SETTLING);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
-    assert.equals(channel.issuedSettleBlock.eq(new util.BN(109)),true);
-    assert.equals(channel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
+    assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
+    assert.equals(channel.updatedProofBlock,null);
+
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
     assert.equals(peerChannel.issuedSettleBlock,null);
-    assert.equals(peerChannel.updatedProof, true);
-    assert.equals(bcReq.length,5);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(11)), true);
+    
 
     //channel can successfully send, so can peer
     currentBlock = currentBlock.add(new util.BN(12));
-    peerChannel.handleSettle(currentBlock);
+    
+    peerChannel.issueSettle(currentBlock);
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_IS_SETTLING);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
-    assert.equals(channel.issuedSettleBlock.eq(new util.BN(109)),true);
-    assert.equals(channel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
+    assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
+    assert.equals(channel.updatedProofBlock,null);
+
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_IS_SETTLING);
     assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(peerChannel.issuedSettleBlock.eq(new util.BN(121)),true);
-    assert.equals(peerChannel.updatedProof, true);
-    assert.equals(bcReq.length,6);
+    assert.equals(peerChannel.issuedSettleBlock.eq(new util.BN(122)),true);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(11)), true);
 
+    
     currentBlock = currentBlock.add(new util.BN(5));
-    channel.handleSettled(currentBlock);
-    peerChannel.handleSettled(currentBlock);
+
+    //simulate race condition: peerChannels tx fails bc channels request went first
+    channel.onChannelSettled(currentBlock);
+    peerChannel.onChannelSettledError(currentBlock);
 
     assert.equals(channel.isOpen(), false);
     assert.equals(channel.state, channelLib.CHANNEL_STATE_SETTLED);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
-    assert.equals(channel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(channel.issuedSettleBlock.eq(new util.BN(109)),true);
-    assert.equals(channel.settledBlock.eq(new util.BN(126)),true);
-    assert.equals(channel.updatedProof, true);
+    assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
+    assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
+    assert.equals(channel.settledBlock.eq(new util.BN(127)),true);
+    assert.equals(channel.updatedProofBlock, null);
+
+    assert.equals(peerChannel.isOpen(), false);
+    assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
+    assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
+    assert.equals(peerChannel.issuedSettleBlock,null);
+    assert.equals(peerChannel.settledBlock,null,true);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(11)), true);
+
+    //peerChannel receives event from peer channel 
+    currentBlock = currentBlock.add(new util.BN(5));
+    peerChannel.onChannelSettled(currentBlock);
+
+    assert.equals(channel.isOpen(), false);
+    assert.equals(channel.state, channelLib.CHANNEL_STATE_SETTLED);
+    assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
+    assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
+    assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
+    assert.equals(channel.settledBlock.eq(new util.BN(127)),true);
+    assert.equals(channel.updatedProofBlock, null);
+
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_SETTLED);
     assert.equals(peerChannel.closedBlock.eq(new util.BN(8)),true);
-    assert.equals(peerChannel.issuedSettleBlock.eq(new util.BN(121)),true);
-    assert.equals(channel.settledBlock.eq(new util.BN(126)),true);
-    assert.equals(peerChannel.updatedProof, true);
-    assert.equals(bcReq.length,6);
+    assert.equals(peerChannel.issuedSettleBlock,null);
+    assert.equals(peerChannel.settledBlock.eq(new util.BN(132)),true);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(11)), true);
+    
 
     assert.end();
 

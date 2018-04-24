@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-18 00:48:03
+* @Last Modified time: 2018-04-24 00:52:55
 */
 
 const message = require('./message');
@@ -26,18 +26,18 @@ REVEAL_TIMEOUT = new util.BN(15);
 
 class Channel{
 
-  constructor(peerState,myState,channelAddress,currentBlock,blockchain){
+  constructor(peerState,myState,channelAddress,currentBlock){
     this.peerState = peerState; //channelState.ChannelStateSync
     this.myState = myState;//channelState.ChannelStateSync
     this.channelAddress = channelAddress || message.EMPTY_20BYTE_BUFFER;
     this.openedBlock = message.TO_BN(currentBlock);
     this.issuedCloseBlock = null;
+    this.issuedTransferUpdateBlock = null;
     this.issuedSettleBlock = null;
     this.closedBlock = null;
     this.settledBlock = null;
-    this.updatedProof = false;
+    this.updatedProofBlock = null;
     this.withdrawnLocks = {};
-    this.blockchain = blockchain;
   }
 
 
@@ -311,45 +311,54 @@ class Channel{
   //this function is only used for handling SETTLE
   //timeouts for locked transfers are handled by the statemachine atm
   //this will be refactored to make sure code locality
-  handleBlock(currentBlock){
+  onBlock(currentBlock){
+    //we use to auto issue settle but now we leave it to the user.
+    var events =[]
     if(this.closedBlock &&
       this.closedBlock.add(this.SETTLE_TIMEOUT).gte(currentBlock)){
-        this.handleSettle(currentBlock);
+        events.push({"event":"IssueSettle", "channelAddress":this.channelAddress});
     }
+    return events;
     // var earliestLockExpiration = this.peerState.minOpenLockExpiration;
     // if(earliestLockExpiration.sub(revealTimeout).gte(currentBlock)){
     //   this.handleClose(this.myState.address,currentBlock);
     //   return false;//We have to close this channel
     // }
-    return;
+
+  }  
+
+  issueSettle(currentBlock){
+   if(this.closedBlock &&
+      currentBlock.gt(this.closedBlock.add(SETTLE_TIMEOUT))){
+        this.issuedSettleBlock = currentBlock;
+    }
+   return this.issuedSettleBlock;
   }
 
-
-  //initiate  channel close
-  handleClose(block){
+  issueClose(currentBlock){
     if(!this.issuedCloseBlock && !this.closedBlock){
-      this._handleCloseProof("CLOSE_CHANNEL")
-      this.updatedProof = true;
-      this.issuedCloseBlock = block;
+      this.issuedCloseBlock = currentBlock;
+      return this.peerState.proof.signature ? this.peerState.proof : null;
+    }
+    throw new Error("Channel Error: Already Closed");
+  }
+
+  issueTransferUpdate(currentBlock){
+    if(!this.issuedCloseBlock){
+      this.issuedTransferUpdateBlock = currentBlock;
+      return this.peerState.proof.signature ? this.peerState.proof : null;
     }
   }
 
-  //respond to channel close from blockchain
-  handleClosed(closedBlock){
-    this.closedBlock = closedBlock;//channel is already closed live, its safe to set this
-    if(!this.updatedProof){
-      this._handleCloseProof("UPDATE_TRANSFER");
-      this.updatedProof = true;
-      this.issuedCloseBlock = closedBlock;
+  issueWithdrawPeerOpenLocks(currentBlock){
+    var openLockProofs = this._withdrawPeerOpenLocks();
+    if(openLockProofs.length > 0){
+      for(var i=0; i < openLockProofs.length; i++){
+        var openLock = openLockProofs[0];
+        this.issueWithdrawPeerOpenLocks[openLock.hashLock.toString('hex')] = currentBlock;
+      }   
     }
-  }
-
-  _handleCloseProof(method){
-    var proof = this.peerState.proof.signature ? this.peerState.proof : null;
-    this.blockchain([method,proof]);
-        var lockProofs =
-    this._withdrawPeerOpenLocks();
-    this.blockchain(["WITHDRAW_LOCKS",lockProofs]);
+    return openLockProofs;
   }
 
   //withdraw all peerstate locks
@@ -360,44 +369,74 @@ class Channel{
       try{
         return [lock,self.peerState.generateLockProof(lock),lock.encode()];
       }catch(err){
-        return [err];
+        console.log(err);
+        return;
       }
-      // body...
-    })
+    });
     return lockProofs;
   }
-
-  handleSettle(currentBlock){
-    if(this.closedBlock && !this.issuedSettleBlock  && !this.settledBlock &&
-      this.closedBlock.add(SETTLE_TIMEOUT).lt(currentBlock)){
-        this.blockchain(["SETTLE",this.channelAddress]);
-        this.issuedSettleBlock = currentBlock;
-      }
-
-  }
-
-  handleSettled(block){
-    if(this.closedBlock){//cannot settle without closing
-      this.settledBlock = block;
-    }
-  }
-
-  //Contract logged deposit event
-  handleDeposit(address,depositAmount){
+  
+  onChannelNewBalance(address,balance){
     if(this.myState.address.compare(address) === 0){
-      this.handleDepositFrom(this.myState,depositAmount);
+      this._handleDepositFrom(this.myState,balance);
     }else if(this.peerState.address.compare(address)===0){
-      this.handleDepositFrom(this.peerState,depositAmount);
+      this._handleDepositFrom(this.peerState,balance);
     }
   }
 
-  handleDepositFrom(from, depositAmount){
+   _handleDepositFrom(from, depositAmount){
     //deposit amount must be monotonically increasing
     if(from.depositBalance.lt(depositAmount)){
       from.depositBalance = depositAmount;
     }else{
       throw new Error("Invalid Deposit Amount: deposit must be monotonically increasing");
     }
+  }
+
+  onChannelClose(closingAddress,block){
+    this.closedBlock = block;
+  }
+
+  onChannelCloseError(closingAddress,block){
+    if(!this.closedBlock){
+      this.issuedCloseBlock = null;
+      this.closedBlock = null;
+    }
+  }
+
+  onTransferUpdated(nodeAddress,block){
+    this.updatedProofBlock = block;
+  }
+
+  onTransferUpdatedError(nodeAddress,block){
+    if(!this.updatedProofBlock){
+      this.issuedTransferUpdateBlock = null;
+      this.updatedProofBlock = null;
+    }
+  }
+
+  onChannelSettled(block){
+    this.settledBlock = block;
+  }
+
+  onChannelSettledError(block){
+    if(!this.settledBlock){
+      this.settledBlock = null;
+      this.issuedSettleBlock = null;
+    }
+  }
+
+  onChannelSecretRevealed(secret,receiverAddress,block){
+    this.issueWithdrawPeerOpenLocks[(util.sha3(secret)).toString('hex')] = block;
+       
+  };
+
+  onChannelSecretRevealedError(secret, receiverAddress){
+    this.issueWithdrawPeerOpenLocks[(util.sha3(secret)).toString('hex')] = null;       
+  };
+
+  onRefund(receiverAddress, amount){
+
   }
 
 }
