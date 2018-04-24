@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-16 18:03:32
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-24 01:05:33
+* @Last Modified time: 2018-04-24 01:27:48
 */
 var test = require('tape');
 var merkleTree = require('../src/MerkleTree');
@@ -1575,6 +1575,12 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
    
     //this should fail to set settled or issue a command, as SETTLE_TIMEOUT hasnt passed
     currentBlock  = currentBlock.add(new util.BN(3));
+    assert.equals(channel.canIssueSettle(currentBlock),false);
+    assert.equals(peerChannel.canIssueSettle(currentBlock),false);
+    var events = channel.onBlock(currentBlock);
+    assert.equals(events.length, 0,"should not trigger issue settle event for internal handler");
+    
+
     channel.issueSettle(currentBlock)
 
     assert.equals(channel.isOpen(), false);
@@ -1592,6 +1598,15 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
 
     //SETTLE_TIMEOUT has passed from closedBlock
     currentBlock = SETTLE_TIMEOUT.add(new util.BN(10));
+    assert.equals(channel.canIssueSettle(currentBlock),true);
+    assert.equals(peerChannel.canIssueSettle(currentBlock),true);
+    
+    var events = channel.onBlock(currentBlock);
+    assert.equals(events.length, 1);
+    
+    assert.equals(events[0][0], "GOT.issueSettle");
+    assert.equals(events[0][1].compare(peerChannel.channelAddress),0)
+
     //channel can successfully send, so can peer
     channel.issueSettle(currentBlock);
 

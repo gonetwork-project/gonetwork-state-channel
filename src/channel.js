@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-24 00:52:55
+* @Last Modified time: 2018-04-24 01:26:25
 */
 
 const message = require('./message');
@@ -314,9 +314,8 @@ class Channel{
   onBlock(currentBlock){
     //we use to auto issue settle but now we leave it to the user.
     var events =[]
-    if(this.closedBlock &&
-      this.closedBlock.add(this.SETTLE_TIMEOUT).gte(currentBlock)){
-        events.push({"event":"IssueSettle", "channelAddress":this.channelAddress});
+    if(this.canIssueSettle(currentBlock)){
+        events.push(["GOT.issueSettle", this.channelAddress]);
     }
     return events;
     // var earliestLockExpiration = this.peerState.minOpenLockExpiration;
@@ -326,10 +325,14 @@ class Channel{
     // }
 
   }  
+  
+  canIssueSettle(currentBlock){
+    return (this.closedBlock &&
+      currentBlock.gt(this.closedBlock.add(SETTLE_TIMEOUT)));
+  }
 
   issueSettle(currentBlock){
-   if(this.closedBlock &&
-      currentBlock.gt(this.closedBlock.add(SETTLE_TIMEOUT))){
+   if(this.canIssueSettle(currentBlock)){
         this.issuedSettleBlock = currentBlock;
     }
    return this.issuedSettleBlock;
