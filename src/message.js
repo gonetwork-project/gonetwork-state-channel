@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 03:38:26
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-18 00:47:45
+* @Last Modified time: 2018-04-24 14:48:29
 */
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl');
@@ -389,6 +389,7 @@ class Ack{
   constructor(options){
     this.to = options.to || EMPTY_20BYTE_BUFFER;
     this.messageHash = options.messageHash || EMPTY_32BYTE_BUFFER;
+    this.msgID = options.msgID || new util.BN(0);
   }
 }
 
@@ -409,5 +410,6 @@ function GenerateRandomSecretHashPair(){
 module.exports= {
   SignedMessage,ProofMessage,DirectTransfer,LockedTransfer,MediatedTransfer,
   RequestSecret,RevealSecret,SecretToProof,Ack,Lock, JSON_REVIVER_FUNC,
-  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN,OpenLock,SERIALIZE,DESERIALIZE,DESERIALIZE_AND_DECODE_MESSAGE
+  GenerateRandomSecretHashPair,StartEntropyCollector,TO_BN,OpenLock,SERIALIZE,DESERIALIZE,DESERIALIZE_AND_DECODE_MESSAGE,
+  EMPTY_20BYTE_BUFFER,EMPTY_32BYTE_BUFFER
 }
