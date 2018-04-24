@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-24 01:26:25
+* @Last Modified time: 2018-04-24 15:56:58
 */
 
 const message = require('./message');
@@ -357,8 +357,8 @@ class Channel{
     var openLockProofs = this._withdrawPeerOpenLocks();
     if(openLockProofs.length > 0){
       for(var i=0; i < openLockProofs.length; i++){
-        var openLock = openLockProofs[0];
-        this.issueWithdrawPeerOpenLocks[openLock.hashLock.toString('hex')] = currentBlock;
+        var openLock = openLockProofs[i][0];
+        this.withdrawnLocks[openLock.hashLock.toString('hex')] = currentBlock;
       }   
     }
     return openLockProofs;
@@ -430,12 +430,12 @@ class Channel{
   }
 
   onChannelSecretRevealed(secret,receiverAddress,block){
-    this.issueWithdrawPeerOpenLocks[(util.sha3(secret)).toString('hex')] = block;
+    this.withdrawnLocks[(util.sha3(secret)).toString('hex')] = block;
        
   };
 
   onChannelSecretRevealedError(secret, receiverAddress){
-    this.issueWithdrawPeerOpenLocks[(util.sha3(secret)).toString('hex')] = null;       
+    this.withdrawnLocks[(util.sha3(secret)).toString('hex')] = null;       
   };
 
   onRefund(receiverAddress, amount){
