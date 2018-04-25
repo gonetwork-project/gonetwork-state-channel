@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-25 16:56:44
+* @Last Modified time: 2018-04-25 17:41:52
 */
 
 const message = require('./message');
@@ -393,7 +393,7 @@ class Channel{
     }
   }
 
-   _handleDepositFrom(from, depositAmount){
+  _handleDepositFrom(from, depositAmount){
     //deposit amount must be monotonically increasing
     if(from.depositBalance.lt(depositAmount)){
       from.depositBalance = depositAmount;
@@ -434,7 +434,9 @@ class Channel{
   }
 
   onChannelSettled(block){
-    this.settledBlock = block;
+    if(!this.settledBlock){
+      this.settledBlock = block;
+    }
   }
 
   onChannelSettledError(){
@@ -446,7 +448,9 @@ class Channel{
 
   onChannelSecretRevealed(secret,receiverAddress,block){
     var hashKey = util.addHexPrefix((util.sha3(secret)).toString('hex'));
-    this.withdrawnLocks[hashKey] = block;     
+    if(this.withdrawnLocks.hasOwnProperty(hashKey)){
+          this.withdrawnLocks[hashKey] = block;          
+    }
   };
 
   onChannelSecretRevealedError(secret){
