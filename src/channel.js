@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-25 15:58:37
+* @Last Modified time: 2018-04-25 16:56:44
 */
 
 const message = require('./message');
@@ -356,6 +356,10 @@ class Channel{
   }
 
   issueWithdrawPeerOpenLocks(currentBlock){
+    //TODO: Enable this with updated Test
+    // if(!this.updatedProofBlock){
+    //   throw new Error("Channel Error: Cannot withdraw lock without updating proof to blockchain");
+    // }
     var openLockProofs = this._withdrawPeerOpenLocks();
     for(var i=0; i < openLockProofs.length; i++){
         var openLock = openLockProofs[i].openLock;
@@ -399,18 +403,27 @@ class Channel{
   }
 
   onChannelClose(closingAddress,block){
-    this.closedBlock = block;
+    if(!this.closedBlock){
+      this.closedBlock = block;
+      if(this.issuedCloseBlock){
+        this.updatedProofBlock = block;
+      }
+      return true;
+    }else{
+      throw new Error("Channel Error: Channel Already Closed");
+    }
   }
 
   onChannelCloseError(){
     if(!this.closedBlock){
       this.issuedCloseBlock = null;
-      this.closedBlock = null;
     }
   }
 
   onTransferUpdated(nodeAddress,block){
-    this.updatedProofBlock = block;
+    if(!this.updatedProofBlock){
+      this.updatedProofBlock = block;
+    }
   }
 
   onTransferUpdatedError(){

@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-16 18:03:32
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-25 15:38:46
+* @Last Modified time: 2018-04-25 16:53:19
 */
 var test = require('tape');
 var merkleTree = require('../src/MerkleTree');
@@ -1266,10 +1266,14 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     
 
     currentBlock = currentBlock.add(new util.BN(10));
-    peerChannel.onChannelClose(peerChannel.address,currentBlock);
+    try{
+      peerChannel.onChannelClose(peerChannel.address,currentBlock);
+    }catch(err){
+      assert.equals(err.message, "Channel Error: Channel Already Closed");
+    }
     assert.equals(peerChannel.isOpen(),false, "channel is closed after issuing a close block even if its not mined yet");
     assert.equals(peerChannel.issuedCloseBlock.eq(new util.BN(6)), true, "issued close block");
-    assert.equals(peerChannel.updatedProofBlock,null, "updatedProof should not be set");
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(16)),true, "updatedProof should be set as we issued close");
     assert.equals(peerChannel.closedBlock.eq(new util.BN(16)),true, "close block set");
     
     assert.end();
@@ -1342,7 +1346,7 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
 
     currentBlock = currentBlock.add(new util.BN(1));
     peerChannel.onChannelClose(peerChannel.address,currentBlock)
-    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(7)),true);
     assert.equals(peerChannel.issuedCloseBlock.eq(new util.BN(6)),true, "can reissue close block after error");
     assert.equals(peerChannel.closedBlock.eq(new util.BN(7)),true, "closed block tracked correctly");
     assert.equals(peerChannel.isOpen(), false);
@@ -1365,7 +1369,7 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
       assert.equals(err.message, "Channel Error: In Closing State or Is Closed", "cant issue closed on closed channel")
     }
 
-    assert.equals(peerChannel.updatedProofBlock, null);
+    assert.equals(peerChannel.updatedProofBlock.eq(new util.BN(7)),true);
     assert.equals(peerChannel.issuedCloseBlock.eq(new util.BN(6)),true, "can reissue close block after error");
     assert.equals(peerChannel.closedBlock.eq(new util.BN(7)),true, "closed block tracked correctly");
     assert.equals(peerChannel.isOpen(), false);
@@ -1574,7 +1578,7 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
     assert.equals(channel.state, channelLib.CHANNEL_STATE_CLOSED);
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
     assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
-    assert.equals(channel.updatedProofBlock,null);
+    assert.equals(channel.updatedProofBlock.eq(new util.BN(9)),true);
     
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
@@ -1599,7 +1603,7 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
     assert.equals(channel.issuedSettleBlock,null);
     assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
-    assert.equals(channel.updatedProofBlock, null);
+    assert.equals(channel.updatedProofBlock.eq(new util.BN(9)),true);
 
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
@@ -1626,7 +1630,7 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
     assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
     assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
-    assert.equals(channel.updatedProofBlock,null);
+    assert.equals(channel.updatedProofBlock.eq(new util.BN(9)),true);
 
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
@@ -1645,7 +1649,7 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
     assert.equals(channel.issuedCloseBlock.eq(new util.BN(5)),true);
     assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
     assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
-    assert.equals(channel.updatedProofBlock,null);
+    assert.equals(channel.updatedProofBlock.eq(new util.BN(9)),true);
 
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_IS_SETTLING);
@@ -1666,7 +1670,7 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
     assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
     assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
     assert.equals(channel.settledBlock.eq(new util.BN(127)),true);
-    assert.equals(channel.updatedProofBlock, null);
+    assert.equals(channel.updatedProofBlock.eq(new util.BN(9)),true);
 
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_CLOSED);
@@ -1685,7 +1689,7 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
     assert.equals(channel.closedBlock.eq(new util.BN(9)),true);
     assert.equals(channel.issuedSettleBlock.eq(new util.BN(110)),true);
     assert.equals(channel.settledBlock.eq(new util.BN(127)),true);
-    assert.equals(channel.updatedProofBlock, null);
+    assert.equals(channel.updatedProofBlock.eq(new util.BN(9)),true);
 
     assert.equals(peerChannel.isOpen(), false);
     assert.equals(peerChannel.state, channelLib.CHANNEL_STATE_SETTLED);
