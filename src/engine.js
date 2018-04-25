@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 00:55:47
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-25 17:57:45
+* @Last Modified time: 2018-04-25 18:07:25
 */
 
 const messageLib = require('./message');
@@ -498,7 +498,7 @@ class Engine extends events.EventEmitter {
     }
     var channel = this.channels[channelAddress.toString('hex')];
     var _channelAddress = channel.channelAddress;
-    return self.blockChain.approve(self.blockchain.tokenAddress,self.address,channel.channelAddress,amount)
+    return self.blockChain.approve(self.blockchain.tokenAddress,channel.channelAddress,amount)
     .then(function (vals) {
       //event Approval(address indexed _owner, address indexed _spender, uint256 _value);
       var owner = vals[0];
@@ -513,7 +513,9 @@ class Engine extends events.EventEmitter {
 
 
   approveChannelManager(amount){
-    return self.blockChain.approve(self.blockchain.gotokenAddress,self.address,self.blockchain.chanelManagerAddress,amount)
+    return self.blockChain.approve(self.blockchain.gotokenAddress,
+      self.blockchain.chanelManagerAddress,
+      amount)
     .then(function (vals) {
       //event Approval(address indexed _owner, address indexed _spender, uint256 _value);
       var owner = vals[0]; 
@@ -521,7 +523,7 @@ class Engine extends events.EventEmitter {
       var value = vals[2];
       return self.onApproval(owner,spender,value);
     }).catch(function(err){
-      return self.onApprovalError(_channelAddress);
+      return self.onApprovalError();
     });
   }
   
