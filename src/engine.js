@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 00:55:47
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-25 16:13:37
+* @Last Modified time: 2018-04-25 17:57:45
 */
 
 const messageLib = require('./message');
@@ -361,12 +361,14 @@ class Engine extends events.EventEmitter {
     }
     this.pendingChannels[peerAddress.toString('hex')] = true;
     var self = this;
-    var _myAdress = this.address;
     var _peerAddress = peerAddress;
-    var _timeout = channelLib.SETTLE_TIMEOUT; 
-    return this.blockchain.newChannel(_peerAddress,_timeout).then(function(channelAddress) {
-      //channelAddress,addressOne,addressTwo,settleTimeout
-      self.onChannelNew(channelAddress,_myAdress,_peerAddress,_timeout);
+    return this.blockchain.newChannel(peerAddress,channelLib.SETTLE_TIMEOUT).then(function(vals) {
+      // ChannelNew(address netting_channel,address participant1,address participant2,uint settle_timeout);
+      var channelAddress = vals[0];
+      var addressOne = vals[1];
+      var addressTwo = vals[2];
+      var timeout = vals[3];
+      self.onChannelNew(channelAddress,addressOne,addressTwo,timeout);
     }).catch(function (err) {
       self.onChannelNewError(_peerAddress);
     });
@@ -406,6 +408,14 @@ class Engine extends events.EventEmitter {
       throw new Error("Invalid TransferUpdate: Cannot issue update on open channel");
     }
     var proof = channel.issueTransferUpdate(this.currentBlock);
+    var self = this;
+    var _channelAddress = channelAddress;
+    
+    return this.blockchain.updateTransfer(channelAddress, proof).then(function(nodeAddress){
+      self.onTransferUpdated(nodeAddress)
+    }).catch(function(err) {
+      self.onTransferUpdatedError(_channelAddress);
+    })
     
   }
 
@@ -473,12 +483,54 @@ class Engine extends events.EventEmitter {
     var self = this;
     return self.blockChain.depoist(_channelAddress,amount).then(function (vals) {
       //event ChannelNewBalance(address token_address, address participant, uint balance);
+      var tokenAddress = vals[0];
       var nodeAddress = vals[1];
       var balance = vals[2];
       return self.onChannelNewBalance(_channelAddress,nodeAddress,balance);
     }).catch(function(err){
       return self.onChannelNewBalanceError(_channelAddress);
     });
+  }
+
+  approveChannel(channelAddress,amount){
+    if(!this.channels.hasOwnProperty(channelAddress)){
+      throw new Error("Invalid approve Channel: unknown channel");
+    }
+    var channel = this.channels[channelAddress.toString('hex')];
+    var _channelAddress = channel.channelAddress;
+    return self.blockChain.approve(self.blockchain.tokenAddress,self.address,channel.channelAddress,amount)
+    .then(function (vals) {
+      //event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+      var owner = vals[0];
+      var spender = vals[1];
+      var value = vals[2];
+     
+      return self.onApproval(owner,spender,value);
+    }).catch(function(err){
+      return self.onApprovalError(_channelAddress);
+    });
+  }
+
+
+  approveChannelManager(amount){
+    return self.blockChain.approve(self.blockchain.gotokenAddress,self.address,self.blockchain.chanelManagerAddress,amount)
+    .then(function (vals) {
+      //event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+      var owner = vals[0]; 
+      var spender = vals[1];
+      var value = vals[2];
+      return self.onApproval(owner,spender,value);
+    }).catch(function(err){
+      return self.onApprovalError(_channelAddress);
+    });
+  }
+  
+  onApproval(owner,spender,value){
+    return true;
+  };
+
+  onApprovalError(address){
+    return true;
   }
 
   //handle blockchain events from blockchain service
@@ -541,6 +593,7 @@ class Engine extends events.EventEmitter {
    var channel = this.channels[channelAddress.toString('hex')];
    channel.onChannelClose(closingAddress, this.currentBlock)
    if(closingAddress.compare(this.address) !==0){
+
     return this.transferUpdate(channelAddress)
    }
    return true;
@@ -574,7 +627,7 @@ class Engine extends events.EventEmitter {
   };
 
   onRefund(channelAddress,receiverAddress,amount){
-    return this.channels[channelAddress.toString('hex')].onRefund(receiverAddress,amount);
+    return true;
   }
   
 

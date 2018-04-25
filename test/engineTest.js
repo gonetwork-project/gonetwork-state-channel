@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:27:58
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-25 16:55:45
+* @Last Modified time: 2018-04-25 18:00:49
 */
 
 test = require('tape');
@@ -400,7 +400,7 @@ test('test engine', function(t){
     assert.end();
   })
 
-  t.test("component test: e2e engine mediated transfer", function (assert) {
+  t.test("component test: #1) e2e engine mediated transfer #2)engine 1 responds with transferUpdate when it receives a channelClose event as it did not issue close", function (assert) {
 
     var sendQueue = [];
     var blockchainQueue = [];
@@ -456,7 +456,7 @@ test('test engine', function(t){
 
     currentBlock = currentBlock.add(new util.BN(1));
 
-    //START  A DIRECT TRANSFER FROM ENGINE(0) to ENGINE(1)
+    //START  A MEDIATED TRANSFER FROM ENGINE(0) to ENGINE(1)
 
     assert.equals(sendQueue.length, 0, "send direct transfer");
 
@@ -517,6 +517,7 @@ test('test engine', function(t){
     console.log(engine.channels[channelAddress.toString('hex')].myState);
     console.log(engine2.channels[channelAddress.toString('hex')].peerState);
 
+    //TEST #1 states should be synced
      assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
@@ -533,7 +534,7 @@ test('test engine', function(t){
      engine2.onMessage(secretToProof);
 
 
-     //final states synchronized
+     
       assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
@@ -544,34 +545,41 @@ test('test engine', function(t){
       new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
 
-    //engine 2 initiate close
+    //TEST #2 Engine 2 initiates close, Engine 1 responds to onChannelClose with updateTransfer request to blockchain
     assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
      assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
     engine2.closeChannel(channelAddress);
-    engine2.withdrawPeerOpenLocks(channelAddress);
-    assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
-    assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
 
 
-    assert.equals(blockchainQueue.length, 1, "blockchain, no open locks to call to blockchain");
-    assertProof(assert,blockchainQueue[0][1],2,channelAddress,50,message.EMPTY_32BYTE_BUFFER,engine.address);
+      engine2.withdrawPeerOpenLocks(channelAddress);
+      assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
+      assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
+
+
+      assert.equals(blockchainQueue.length, 1, "blockchain, no open locks to call to blockchain");
+      assertProof(assert,blockchainQueue[0][1],2,channelAddress,50,message.EMPTY_32BYTE_BUFFER,engine.address);
+      assert.equals(mockBlockChain.cmdQueue.length,1);
+      assert.equals(mockBlockChain.cmdQueue[0],"closeChannel");
+      
+     
+      
+      currentBlock =currentBlock.add(new util.BN(1));    
+      
+      engine.onChannelClose(channelAddress,engine2.address,currentBlock)
+      .then(function(){
+        engine.withdrawPeerOpenLocks(channelAddress);
+        assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_CLOSED);
+        assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
+        assert.equals(blockchainQueue.length, 2,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
+        assert.equals(mockBlockChain.cmdQueue.length,2);
+        assert.equals(mockBlockChain.cmdQueue[0],"closeChannel");
+        assert.equals(mockBlockChain.cmdQueue[1],"updateTransfer");
+      });
+
+      
+
     
-     //blockchain responds with close events
-    //blockchainQueue = [];
-    currentBlock =currentBlock.add(new util.BN(1));    
     
-    engine.onChannelClose(channelAddress,engine2.address,currentBlock);
-    engine.withdrawPeerOpenLocks(channelAddress);//no locks
-
-    assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_CLOSED);
-    assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
-    assert.equals(blockchainQueue.length, 1,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-    assert.equals(mockBlockChain.cmdQueue.length,1);
-    assert.equals(mockBlockChain.cmdQueue[0],"closeChannel");
-    // assert.equals(blockchainQueue[0][1], null,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-    // assert.equals(blockchainQueue[1][1].length, 0,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-
-
 
     assert.end();
   });
@@ -1375,41 +1383,10 @@ t.test('should fail and revert channel state to open when close channel errors o
     engine2.closeChannel(channelAddress).then(function(){
       assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
     });
-    // engine2.withdrawPeerOpenLocks(channelAddress);
-    // assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
-    // assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
-
-
-    // assert.equals(blockchainQueue.length, 2, "blockchain");
-    // assertProof(assert,blockchainQueue[0][1],2,channelAddress,50,message.EMPTY_32BYTE_BUFFER,engine.address);
-    // assert.equals(blockchainQueue[1][1].length,0, "no open locks");
-    
-    //  //blockchain responds with close events
-    // //blockchainQueue = [];
-    // currentBlock =currentBlock.add(new util.BN(1));    
-    
-    // engine.onChannelClose(channelAddress,engine2.address,currentBlock);
-    // engine.withdrawPeerOpenLocks(channelAddress);
-
-    // assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_CLOSED);
-    // assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
-
-   
-    // assert.equals(blockchainQueue.length, 4,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-    // assert.equals(blockchainQueue[2][1],null);
-    // assert.equals(blockchainQueue[3][1].length,0, "no open locks");
-    
-    // assert.equals(blockchainQueue[0][1], null,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-    // assert.equals(blockchainQueue[1][1].length, 0,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-
-
 
     assert.end();
 
   });
-
-
-  //TEST BlockChain failure and revert for issuing proofs etc.
 
   // t.test('lock expires on engine handleBlock',function (assert) {
   //   var blockchainQueue = [];
