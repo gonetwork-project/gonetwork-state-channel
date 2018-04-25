@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 00:55:47
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-24 16:17:16
+* @Last Modified time: 2018-04-25 16:13:37
 */
 
 const messageLib = require('./message');
@@ -10,14 +10,13 @@ const channelLib = require('./channel');
 const channelStateLib = require('./channelState');
 const stateMachineLib = require('./stateMachine/stateMachine');
 const util = require('ethereumjs-util');
+const events = require('events');
 
-
-
-
-class Engine {
+class Engine extends events.EventEmitter {
 
   constructor(address,signatureService,blockchainService){
-
+    super();
+   
     //dictionary of channels[peerAddress] that are pending mining
     this.pendingChannels = {};
     this.channels = {};
@@ -308,7 +307,9 @@ class Engine {
             //channel.handleClose(this.currentBlock);
             break;
           case 'GOT.issueSettle':
-            console.log("CAN ISSUE SETTLE:"+state.toString('hex'));
+            //TODO emit "IssueSettle to ui + channel";
+            var channelAddress = state;
+            console.log("CAN ISSUE SETTLE:"+channelAddress.toString('hex'));
             break;
           }
           return;
@@ -325,6 +326,10 @@ class Engine {
    
   
   onBlock(block){
+    if(block.lt(this.currentBlock)){
+      throw new Error("Block Error: block count must be monotonically increasing");
+    }
+
     this.currentBlock = block;
     //handleBlock by all the in-flight messages
     //timeout or take action as needed
@@ -355,7 +360,16 @@ class Engine {
       throw new Error("Invalid Channel: cannot create new channel as channel already exists with peer and is unsettled");
     }
     this.pendingChannels[peerAddress.toString('hex')] = true;
-    this.blockchain.newChannel(peerAddress,channelLib.SETTLE_TIMEOUT);
+    var self = this;
+    var _myAdress = this.address;
+    var _peerAddress = peerAddress;
+    var _timeout = channelLib.SETTLE_TIMEOUT; 
+    return this.blockchain.newChannel(_peerAddress,_timeout).then(function(channelAddress) {
+      //channelAddress,addressOne,addressTwo,settleTimeout
+      self.onChannelNew(channelAddress,_myAdress,_peerAddress,_timeout);
+    }).catch(function (err) {
+      self.onChannelNewError(_peerAddress);
+    });
     
   };
 
@@ -364,31 +378,107 @@ class Engine {
       throw new Error("Invalid Close: unknown channel");
     }
     var channel = this.channels[channelAddress.toString('hex')];
-    if(channel.isOpen()){
-      var proof = channel.issueClose(this.currentBlock);
-      this.blockchain.closeChannel(channelAddress,proof,this.onChannelClose,this.onChannelCloseError);
+    if(!channel.isOpen()){
+      throw new Error("Invalid Close: Cannot reissue Closed");
     }
+
+    var proof = channel.issueClose(this.currentBlock);
+    var self = this;
+    var _channelAddress = channelAddress;
+
+    return this.blockchain.closeChannel(channelAddress,proof).then(function(closingAddress){
+      //channelAddress,closingAddress,block
+      //TODO: @Artur, only call this after the transaction is mined i.e. txMulitplexer 
+      return self.onChannelClose(_channelAddress,closingAddress);
+    }).catch(function(error){
+      return self.onChannelCloseError(_channelAddress);
+    });
+  
+    
+  }
+
+  transferUpdate(channelAddress){
+    if(!this.channels.hasOwnProperty(channelAddress.toString('hex'))){
+      throw new Error("Invalid TransferUpdate: unknown channel");
+    }
+    var channel = this.channels[channelAddress.toString('hex')];
+    if(channel.isOpen()){
+      throw new Error("Invalid TransferUpdate: Cannot issue update on open channel");
+    }
+    var proof = channel.issueTransferUpdate(this.currentBlock);
+    
   }
 
   withdrawPeerOpenLocks(channelAddress){
     if(!this.channels.hasOwnProperty(channelAddress.toString('hex'))){
-      throw new Error("Invalid Close: unknown channel");
+      throw new Error("Invalid Withdraw: unknown channel");
     }
     var channel = this.channels[channelAddress.toString('hex')];
-    if(!channel.isOpen()){
-      var openLockProofs = channel.issueWithdrawPeerOpenLocks(this.currentBlock);
-      this.blockchain.withdrawPeerOpenLocks(channelAddress,openLockProofs,
-        this.onChannelSecretRevealed,
-        this.onChannelSecretRevealedError);
+    if(channel.isOpen()){
+      throw new Error("Invalid Withdraw: Cannot issue withdraw on open channel");
     }
+    var openLockProofs = channel.issueWithdrawPeerOpenLocks(this.currentBlock);
+    var withdraws = [];
+    for(var i=0; i< openLockProofs.length; i++){
+        var p = openLockProofs[i];
+        //nonce,gasPrice,nettingChannelAddress, encodedOpenLock, merkleProof,secret)
+        var _secret = p.openLock.secret;
+        var _channelAddress = channelAddress;
+        var self = this;
+        var promise = this.blockchain.withdrawLock(channelAddress,p.encodeLock(),p.merkleProof,_secret)
+        .then(function(vals){
+          var secret = vals[0];
+          var receiverAddress = vals[1];
+           //channelAddress, secret, receiverAddress,block
+           return self.onChannelSecretRevealed(_channelAddress,secret,receiverAddress)
+        })
+        .catch(function(err){              
+           return self.onChannelSecretRevealedError(_channelAddress,_secret);
+        })
+        withdraws.push(promise);
+    }
+    return Promise.all(withdraws);
+    
   }
 
   settleChannel(channelAddress){
     if(!this.channels.hasOwnProperty(channelAddress)){
-      throw new Error("Invalid Settled: unknown channel");
+      throw new Error("Invalid Settle: unknown channel");
     }
     var channel = this.channels[channelAddress.toString('hex')];
-    channel.handleSettle(this.currentBlock);
+    if(channel.isOpen()){
+      throw new Error("Invalid Settle: cannot issue settle on open channel");
+    }
+
+    var _channelAddress = channelAddress;
+    var self = this;
+    channel.issueSettle(this.currentBlock);
+    var _channelAddress = channelAddress;
+    return self.blockChain.settle(_channelAddress).then(function () {
+      return self.onChannelSettled(_channelAddress);
+    }).catch(function(err){
+      return self.onChannelSettledError(_channelAddress);
+    });
+  }
+
+  depositChannel(channelAddress,amount){
+    if(!this.channels.hasOwnProperty(channelAddress)){
+      throw new Error("Invalid Settle: unknown channel");
+    }
+    var channel = this.channels[channelAddress.toString('hex')];
+    if(!channel.isOpen()){
+      throw new Error("Invalid Deposite: cannot issue settle on open channel");
+    }
+    var _channelAddress = channelAddress;
+    var self = this;
+    return self.blockChain.depoist(_channelAddress,amount).then(function (vals) {
+      //event ChannelNewBalance(address token_address, address participant, uint balance);
+      var nodeAddress = vals[1];
+      var balance = vals[2];
+      return self.onChannelNewBalance(_channelAddress,nodeAddress,balance);
+    }).catch(function(err){
+      return self.onChannelNewBalanceError(_channelAddress);
+    });
   }
 
   //handle blockchain events from blockchain service
@@ -433,6 +523,7 @@ class Engine {
     if(this.pendingChannels.hasOwnProperty(peerAddress.toString('hex'))){
       delete this.pendingChannels[peerAddress.toString('hex')] ;
     }
+    return;
     //TODO: emit UnableToCreate Channel with Peer
   }
 
@@ -441,50 +532,52 @@ class Engine {
     return true;
   }
 
-  onChannelClose(channelAddress,closingAddress,block){
+  onChannelNewBalanceError(){
+    return false;
+  }
+
+  onChannelClose(channelAddress,closingAddress){
 
    var channel = this.channels[channelAddress.toString('hex')];
-   channel.onChannelClose(closingAddress, block)
-   if(!channel.issuedCloseBlock){
-    var proof = channel.issueTransferUpdate(block);
-
-    this.blockchain.updateTransfer(channelAddress,proof,
-      this.onTransferUpdated,
-      this.onTransferUpdatedError);
+   channel.onChannelClose(closingAddress, this.currentBlock)
+   if(closingAddress.compare(this.address) !==0){
+    return this.transferUpdate(channelAddress)
    }
    return true;
   }
 
-  onChannelCloseError(channelAddress,closingAddress,block){
-   return this.channels[channelAddress.toString('hex')].onChannelCloseErro(closingAddress, block)
+  onChannelCloseError(channelAddress,proof){
+    var channel = this.channels[channelAddress.toString('hex')];
+    return channel.onChannelCloseError();
   }
 
-  onTransferUpdated(channelAddress,nodeAddress,block){
-    return this.channels[channelAddress.toString('hex')].onTransferUpdated(nodeAddress,block);
+  onTransferUpdated(channelAddress,nodeAddress){
+    return this.channels[channelAddress.toString('hex')].onTransferUpdated(nodeAddress,this.currentBlock);
   }
 
-  onTransferUpdatedError(channelAddress,nodeAddress,block){
-    return this.channels[channelAddress.toString('hex')].onTransferUpdatedError(nodeAddress,block);
+  onTransferUpdatedError(channelAddress){
+    return this.channels[channelAddress.toString('hex')].onTransferUpdatedError();
   }
 
-  onChannelSettled(channelAddress, block){
-    return this.channels[channelAddress.toString('hex')].onChannelSettled(block);
+  onChannelSettled(channelAddress){
+    return this.channels[channelAddress.toString('hex')].onChannelSettled(this.currentBlock);
   }
-  onChannelSettledError(channelAddress, block){
-   return this.channels[channelAddress.toString('hex')].onChannelSettledError(block);;
+  onChannelSettledError(channelAddress){
+   return this.channels[channelAddress.toString('hex')].onChannelSettledError();;
   }
 
-  onChannelSecretRevealed(channelAddress, secret, receiverAddress,block){
-    return this.channels[channelAddress.toString('hex')].onChannelSecretRevealed(secret,receiverAddress,block);
+  onChannelSecretRevealed(channelAddress, secret, receiverAddress){
+    return this.channels[channelAddress.toString('hex')].onChannelSecretRevealed(secret,receiverAddress,this.currentBlock);
   };
-  onChannelSecretRevealedError(channelAddress, secret, receiverAddress,block){
-    return this.channels[channelAddress.toString('hex')].onChannelSecretRevealedError(secret,receiverAddress,block);
+  onChannelSecretRevealedError(channelAddress, secret){
+    return this.channels[channelAddress.toString('hex')].onChannelSecretRevealedError(secret);
   };
 
   onRefund(channelAddress,receiverAddress,amount){
     return this.channels[channelAddress.toString('hex')].onRefund(receiverAddress,amount);
   }
   
+
 }
 
 module.exports = {
