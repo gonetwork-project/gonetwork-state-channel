@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-24 15:56:58
+* @Last Modified time: 2018-04-25 15:58:37
 */
 
 const message = require('./message');
@@ -340,10 +340,12 @@ class Channel{
 
   issueClose(currentBlock){
     if(!this.issuedCloseBlock && !this.closedBlock){
+
       this.issuedCloseBlock = currentBlock;
+      
       return this.peerState.proof.signature ? this.peerState.proof : null;
     }
-    throw new Error("Channel Error: Already Closed");
+    throw new Error("Channel Error: In Closing State or Is Closed");
   }
 
   issueTransferUpdate(currentBlock){
@@ -355,12 +357,12 @@ class Channel{
 
   issueWithdrawPeerOpenLocks(currentBlock){
     var openLockProofs = this._withdrawPeerOpenLocks();
-    if(openLockProofs.length > 0){
-      for(var i=0; i < openLockProofs.length; i++){
-        var openLock = openLockProofs[i][0];
-        this.withdrawnLocks[openLock.hashLock.toString('hex')] = currentBlock;
-      }   
-    }
+    for(var i=0; i < openLockProofs.length; i++){
+        var openLock = openLockProofs[i].openLock;
+        var hashKey = util.addHexPrefix(openLock.hashLock.toString('hex'));
+        this.withdrawnLocks[hashKey] = currentBlock;
+    }   
+    
     return openLockProofs;
   }
 
@@ -370,7 +372,7 @@ class Channel{
     var self = this;
     var lockProofs = Object.values(this.peerState.openLocks).map(function  (lock) {
       try{
-        return [lock,self.peerState.generateLockProof(lock),lock.encode()];
+        return new OpenLockProof({"openLock":lock,"merkleProof":self.peerState.generateLockProof(lock)});
       }catch(err){
         console.log(err);
         return;
@@ -400,7 +402,7 @@ class Channel{
     this.closedBlock = block;
   }
 
-  onChannelCloseError(closingAddress,block){
+  onChannelCloseError(){
     if(!this.closedBlock){
       this.issuedCloseBlock = null;
       this.closedBlock = null;
@@ -411,7 +413,7 @@ class Channel{
     this.updatedProofBlock = block;
   }
 
-  onTransferUpdatedError(nodeAddress,block){
+  onTransferUpdatedError(){
     if(!this.updatedProofBlock){
       this.issuedTransferUpdateBlock = null;
       this.updatedProofBlock = null;
@@ -422,7 +424,7 @@ class Channel{
     this.settledBlock = block;
   }
 
-  onChannelSettledError(block){
+  onChannelSettledError(){
     if(!this.settledBlock){
       this.settledBlock = null;
       this.issuedSettleBlock = null;
@@ -430,12 +432,13 @@ class Channel{
   }
 
   onChannelSecretRevealed(secret,receiverAddress,block){
-    this.withdrawnLocks[(util.sha3(secret)).toString('hex')] = block;
-       
+    var hashKey = util.addHexPrefix((util.sha3(secret)).toString('hex'));
+    this.withdrawnLocks[hashKey] = block;     
   };
 
-  onChannelSecretRevealedError(secret, receiverAddress){
-    this.withdrawnLocks[(util.sha3(secret)).toString('hex')] = null;       
+  onChannelSecretRevealedError(secret){
+    var hashKey = util.addHexPrefix((util.sha3(secret)).toString('hex'));
+    this.withdrawnLocks[hashKey] = null;    
   };
 
   onRefund(receiverAddress, amount){
@@ -444,8 +447,20 @@ class Channel{
 
 }
 
+class OpenLockProof{
+  constructor(options){
+    this.openLock = options.openLock;
+    this.merkleProof = options.merkleProof;
+  }
+
+  encodeLock(){
+    //we dont want the secret appended to this encoding
+    return this.openLock.encode().slice(0,96);
+  }
+}
+
 module.exports = {
   Channel,SETTLE_TIMEOUT,REVEAL_TIMEOUT,CHANNEL_STATE_IS_CLOSING,CHANNEL_STATE_IS_SETTLING, CHANNEL_STATE_IS_OPENING,
-  CHANNEL_STATE_OPEN, CHANNEL_STATE_CLOSED, CHANNEL_STATE_SETTLED
+  CHANNEL_STATE_OPEN, CHANNEL_STATE_CLOSED, CHANNEL_STATE_SETTLED,OpenLockProof
 }
 

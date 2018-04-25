@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-16 18:03:32
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-24 01:27:48
+* @Last Modified time: 2018-04-25 15:38:46
 */
 var test = require('tape');
 var merkleTree = require('../src/MerkleTree');
@@ -1228,21 +1228,32 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
       return l.getMessageHash();
     }));
     testMT.generateHashTree();
-    var openLockProofs = channel.issueWithdrawPeerOpenLocks(currentBlock);
+    var openLockProofs = peerChannel.issueWithdrawPeerOpenLocks(currentBlock);
+    console.log(openLockProofs);
+    
+
+    var assertLockProofString = function(openLockProof,root,stringABIEncodedLock, stringProofHexString,stringRoot){
+      assert.equals(util.addHexPrefix(openLockProof.encodeLock().toString('hex')),stringABIEncodedLock, "correctly solidity encoded lock");
+      assert.equals(util.addHexPrefix(openLockProof.merkleProof.reduce(function (result, hashBytes) {
+          result+=hashBytes.toString('hex');
+          return result;
+      },"")), stringProofHexString, "correct proof string");
+      assert.equal(util.addHexPrefix(root.toString('hex')), stringRoot);
+    };
+
     var expectedLockProofs = [
-    ["0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000014b8c5926ff513010d19bc9c549d21e8514c5577ef228eff65e3b6bc29a0e25ad25345435245543100000000000000000000000000000000000000000000000000",
+    ["0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000014b8c5926ff513010d19bc9c549d21e8514c5577ef228eff65e3b6bc29a0e25ad2",
     "0x508f0f548b4306ecff5e60b641479a8645cfce137ceddf6e9afe43e38412c31a",
     "0xd4194160804ec927608381e350dac6adb02f2ee3270ca63b62ccae0e8a990420"],
     [
-    "0x00000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000028211d5b14c838a5d7ebab63b8e080f1cf529b51b7c58bb4446ae7f24b0edb158e5345435245543200000000000000000000000000000000000000000000000000",
+    "0x00000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000028211d5b14c838a5d7ebab63b8e080f1cf529b51b7c58bb4446ae7f24b0edb158e",
     "0x0eeee20f167e07ba2f3e0e3c122add49c06ab4f3a8df2a2e3b9e895f07f80e8f",
     "0xd4194160804ec927608381e350dac6adb02f2ee3270ca63b62ccae0e8a990420"
     ]];
-    for(var i = 0; i < openLockProofs; i++){
-      var ll = openLockProofs[i];
-      console.log(ll);
-      printProof(ll[0],ll[1],testMT.getRoot());
-      assertLockProofString(ll[0],ll[1],testMT.getRoot(),expectedLockProofs[i][0],expectedLockProofs[i][1],expectedLockProofs[i][2]);
+    for(var i = 0; i < openLockProofs.length; i++){
+      var opl = openLockProofs[i];
+      assert.equals(opl.encodeLock().length, 96);
+      assertLockProofString(opl,testMT.getRoot(),expectedLockProofs[i][0],expectedLockProofs[i][1],expectedLockProofs[i][2]);
     }
     //assert,transfer,nonce,channelAddress,transferredAmount,locksRoot,from
     
@@ -1351,7 +1362,7 @@ t.test('channel component test: mediated transfer should accept expired locks ; 
     try{
       peerChannel.issueClose(currentBlock);
     }catch(err){
-      assert.equals(err.message, "Channel Error: Already Closed",true, "cant issue closed on closed channel")
+      assert.equals(err.message, "Channel Error: In Closing State or Is Closed", "cant issue closed on closed channel")
     }
 
     assert.equals(peerChannel.updatedProofBlock, null);
@@ -1417,7 +1428,7 @@ t.test('channel can call transferUpdate after on chain close initiated by partne
     try{
     var proof = peerChannel.issueClose(currentBlock)
     }catch(err){
-      assert.equal(err.message, "Channel Error: Already Closed", "cannot issue close after close has already been called");
+      assert.equal(err.message, "Channel Error: In Closing State or Is Closed");
     }
     currentBlock = currentBlock.add(new util.BN(1));
 
