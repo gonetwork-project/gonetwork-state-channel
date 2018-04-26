@@ -2,12 +2,13 @@
 * @Author: amitshah
 * @Date:   2018-04-18 19:55:20
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-18 20:14:21
+* @Last Modified time: 2018-04-25 20:03:37
 */
 const stateChannel= require('../src/index.js');
 const events = require('events');
 const util = require("ethereumjs-util");
 const message = stateChannel.message;
+const channel = stateChannel.channel;
 
 
 var pk1=util.toBuffer("0xb507928218b7b1e48f82270011149c56b6191cd1f2846e01c419f0a1a57acc42");
@@ -95,22 +96,20 @@ engine2.blockchain = function (msg)  {
   blockchainQueue.push(msg);
 }
 
-engine.onNewChannel(channelAddress,
- util.toBuffer(acct1),
-  new util.BN(0),
-  util.toBuffer(acct4),
-  new util.BN(0));
-engine2.onNewChannel(channelAddress,
-  util.toBuffer(acct1),
-  new util.BN(0),
-  util.toBuffer(acct4),
-  new util.BN(0))
 
+engine.onChannelNew(channelAddress,
+      util.toBuffer(acct1),
+      util.toBuffer(acct4),
+      channel.SETTLE_TIMEOUT);
 
+engine2.onChannelNew(channelAddress,
+      util.toBuffer(acct1),
+      util.toBuffer(acct4),
+      channel.SETTLE_TIMEOUT);
 
-engine.onDeposited(channelAddress,util.toBuffer(acct1), new util.BN(27000));
-engine2.onDeposited(channelAddress,util.toBuffer(acct1), new util.BN(27000));
-
+engine.onChannelNewBalance(channelAddress,util.toBuffer(acct1), new util.BN(27000));
+engine2.onChannelNewBalance(channelAddress,util.toBuffer(acct1), new util.BN(27000));
+   
 //END SETUP
 
 
@@ -118,6 +117,26 @@ currentBlock = currentBlock.add(new util.BN(1));
 
 //START  A DIRECT TRANSFER FROM ENGINE(0) to ENGINE(1)
 var cl = console.log;
+
+start = Date.now();
+var transferredAmount = new util.BN(1);
+for (var i=0; i < 1000; i++){
+  sendQueue = [];
+//to,target,amount,expiration,secret,hashLock
+  var secretHashPair = message.GenerateRandomSecretHashPair();
+  transferredAmount = transferredAmount.add(new util.BN(1));
+  engine.sendDirectTransfer(util.toBuffer(acct4),transferredAmount);
+  var directTransfer = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+
+
+  engine2.onMessage(directTransfer);
+
+}
+sendQueue = [];
+
+end = Date.now();
+
+cl("Direct Transfers per SECOND per USER "+ 1000/((end - start)/1000));
 start = Date.now();
 console.log = function() {};
 for (var i=0; i < 1000; i++){
@@ -159,8 +178,8 @@ for (var i=0; i < 1000; i++){
 
 }
 end = Date.now();
+cl("Locked Transfers per SECOND per USER "+ 1000/((end - start)/1000));
 
-cl("LOCKED TRANSACTIONS PER SECOND:"+ 1000/((end - start)/1000));
 
 // }
 
