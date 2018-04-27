@@ -24,9 +24,10 @@
     "browserify": "^15.2.0",
     "http-server": "^0.11.1",
     "tape": "^4.9.0",
-    "faucet": "0.0.1"
+    "faucet": "0.0.1",
+    "blockchain-service": "git://github.com/unao/blockchain-service.git#e5078c34d4598cb1b2696fde66410b6173acab91"
   },
-   "dependencies": {
+  "dependencies": {
     "ethereumjs-abi": "*",
     "ethereumjs-tx": "*",
     "ethereumjs-util": "*",
