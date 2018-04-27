@@ -59,6 +59,7 @@ class Engine extends events.EventEmitter {
     this.currentBlock = new util.BN(0);
   }
 
+  // todo: @Amit - onXYZ usually denotes passing a callback - I would suggest to change the name to handleMessage
   /**
      * Handle an incoming message after it has been deserialized
      * @param {message.SignedMessage} message.

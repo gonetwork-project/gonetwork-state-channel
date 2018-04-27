@@ -8,8 +8,8 @@ const stateChannel= require('../../src/index.js');
 const events = require('events');
 const util = require("ethereumjs-util");
 
-const { 
-  MQTT_URL,
+const {
+  initP2P,
   channelAddress,
   pk1, pk2, pk3, pk4,
   acct1, acct2, acct3, acct4
@@ -44,21 +44,14 @@ var cl = console.log;
 start = Date.now();
 var transferredAmount = new util.BN(1);
 
-var mqtt = require('mqtt')
-var client2  = mqtt.connect('mqtt://test.mosquitto.org')
+const p2pClient = initP2P(acct4)
  
-client2.on('connect', function () {
-  client2.subscribe(acct4)
-})
-
 var count=0;
-var totalCount = 0;
-start = Date.now();
-end = Date.now();
-
+var start, end;
 
 console.log(engine2.channels[channelAddress.toString('hex')].peerState.proof);
-client2.on('message', function (topic, msg) {
+p2pClient.on('message-received', function (m) {
+  const msg = m.payload;
   // message is Buffer
   //count++;
   if(count ==0){
@@ -69,8 +62,14 @@ client2.on('message', function (topic, msg) {
     end = Date.now();
      cl("Direct Transfers Processed Per SECOND per USER "+ 1000/((end - start)/1000));
   }
-  //console.log(msg);
+  console.log(m.id, count);
   var directTransfer = message.DESERIALIZE_AND_DECODE_MESSAGE(msg);
-  engine2.onMessage(directTransfer);
+  try {
+    engine2.onMessage(directTransfer);
+  } catch (err) {
+    console.log(err)
+  }
   count++;
+  // @Amit - this looks rather serious
+  console.warn('I AM NOT LOGGED - MEANING .onMessage THROWN')
 });

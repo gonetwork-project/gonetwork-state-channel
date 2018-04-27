@@ -6,10 +6,10 @@
 */
 const stateChannel = require('../../src/index.js');
 const events = require('events');
-const util = require("ethereumjs-util");
+const util = require('ethereumjs-util');
 
-const { 
-  MQTT_URL,
+const {
+  initP2P,
   channelAddress,
   pk1, pk2, pk3, pk4,
   acct1, acct2, acct3, acct4
@@ -43,21 +43,37 @@ var cl = console.log;
 start = Date.now();
 var transferredAmount = new util.BN(1);
 
-var mqtt = require('mqtt')
-var client = mqtt.connect('mqtt://test.mosquitto.org')
+const p2pClient = initP2P(acct1)
 
 engine.send = function (msg) {
-  client.publish(acct4, message.SERIALIZE(msg));
+  p2pClient.send(acct4, message.SERIALIZE(msg))
 }
-client.on('connect', function () {
-  start = Date.now();
-  for (var i = 0; i < 1000; i++) {
-    transferredAmount = transferredAmount.add(new util.BN(1));
-    engine.sendDirectTransfer(util.toBuffer(acct4), transferredAmount);
-    //var msg = sendQueue[sendQueue.length -1];
+
+p2pClient.on('status-changed', (s) => {
+  // console.log('STATUS', s)
+  if (s === 'connected') {
+    start = Date.now();
+    for (var i = 0; i < 1000; i++) {
+      transferredAmount = transferredAmount.add(new util.BN(1));
+      engine.sendDirectTransfer(util.toBuffer(acct4), transferredAmount);
+      //var msg = sendQueue[sendQueue.length -1];
+    }
+    end = Date.now();
+    cl("Direct Transfers Sent Per SECOND per USER " + 1000 / ((end - start) / 1000));
   }
-  end = Date.now();
-  cl("Direct Transfers Sent Per SECOND per USER " + 1000 / ((end - start) / 1000));
-})
+}
+)
+
+
+// client.on('connect', function () {
+//   start = Date.now();
+//   for (var i = 0; i < 1000; i++) {
+//     transferredAmount = transferredAmount.add(new util.BN(1));
+//     engine.sendDirectTransfer(util.toBuffer(acct4), transferredAmount);
+//     //var msg = sendQueue[sendQueue.length -1];
+//   }
+//   end = Date.now();
+//   cl("Direct Transfers Sent Per SECOND per USER " + 1000 / ((end - start) / 1000));
+// })
 
 

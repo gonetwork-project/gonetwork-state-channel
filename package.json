@@ -21,11 +21,13 @@
     "babel-cli": "^6.26.0",
     "babel-core": "^6.26.0",
     "babel-preset-es2015": "^6.24.1",
+    "blockchain-service": "git://github.com/unao/blockchain-service.git#d117ac28b6a3731ad43738e60b1121291f242190",
     "browserify": "^15.2.0",
-    "http-server": "^0.11.1",
-    "tape": "^4.9.0",
     "faucet": "0.0.1",
-    "blockchain-service": "git://github.com/unao/blockchain-service.git#e5078c34d4598cb1b2696fde66410b6173acab91"
+    "http-server": "^0.11.1",
+    "node-fetch": "^2.1.2",
+    "node-persist": "^2.1.0",
+    "tape": "^4.9.0"
   },
   "dependencies": {
     "ethereumjs-abi": "*",
