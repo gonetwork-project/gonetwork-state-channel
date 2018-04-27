@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-25 17:41:52
+* @Last Modified time: 2018-04-26 13:32:41
 */
 
 const message = require('./message');
@@ -24,8 +24,16 @@ SETTLE_TIMEOUT = new util.BN(100);
 //in addition to expection of settled locks
 REVEAL_TIMEOUT = new util.BN(15);
 
+/** Class representing the state between two participants*/
 class Channel{
 
+  /**
+     * Create a Channel.
+     * @param {ChannelState} peerState - The initialized ChannelState object representing a peer.
+     * @param {ChannelState} myState - The initialized ChannelState object representing my state.
+     * @param {Bytes} channelAddress - The on chain netting channel ethereum contract address.
+     * @param {BN} currentBlock - The current block number on ethereum.
+     */
   constructor(peerState,myState,channelAddress,currentBlock){
     this.peerState = peerState; //channelState.ChannelStateSync
     this.myState = myState;//channelState.ChannelStateSync
@@ -41,7 +49,13 @@ class Channel{
   }
 
 
-  //the amount of funds that can be sent from -> to in the payment channel
+  /**
+     * The amount of funds that can be sent from -> to in the payment channel at a particular block.
+     * The block is important as locks expire those funds are made available again
+     * @param {ChannelState} from -
+     * @param {ChannelState} to -
+     * @param {BN} currentBlock - The current block number on ethereum.
+     */
   transferrableFromTo(from,to,currentBlock){
     var safeBlock = null;
     if(currentBlock){
