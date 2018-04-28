@@ -2,23 +2,34 @@
 * @Author: amitshah
 * @Date:   2018-04-17 03:38:26
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-24 14:48:29
+* @Last Modified time: 2018-04-28 18:13:08
 */
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl');
 const rlp = require('rlp');
 const abi = require("ethereumjs-abi");
 
-//empty 32 byte buffer
+/**
+ * @const {Buffer} EMPTY_32BYTE_BUFFER
+ */
 EMPTY_32BYTE_BUFFER= Buffer.alloc(32);
+/**
+* @const {Buffer} EMPTY_20BYTE_BUFFER
+*/
 EMPTY_20BYTE_BUFFER = Buffer.alloc(20);
 
-//TODO: handle out of bounds values for Proof Messages
+/** @class Hashable - a hashable interface class*/
 class Hashable{
+  /** getMessageHash - must implement */
   getMessageHash(){
     throw new Error("unimplemented getMessageHash");
   }
 }
+
+/** TO_BN - convert a base 16 int to a BN 
+* @param {int} value - convert base 16 value to bn
+* @returns {BN}
+*/
 function TO_BN(value){
   if(util.BN.isBN(value)){
     return value;
@@ -26,7 +37,12 @@ function TO_BN(value){
     return new util.BN(value,16);
   }
 }
-//we need to handle buffer serialization and deserialization
+
+/** JSON_REVIVER_FUNC - A reviver function to be sent to JSON.parse to handle buffer serialization and deserialization
+* @param {} k 
+* @param {} v
+* @returns {} - deserialized value 
+*/
 function JSON_REVIVER_FUNC(k,v) {
       if (
       v !== null            &&
@@ -40,14 +56,26 @@ function JSON_REVIVER_FUNC(k,v) {
       return v;
 }
 
+/** SERIALIZE - serialize message object
+* @param {SignedMessage} msg - message.SignedMessage base class type  
+* @returns {string} - serialized value 
+*/
 function SERIALIZE(msg){
   return JSON.stringify(msg);
 }
 
+/** DESERIALIZE - serialize message object
+* @param {string} data - serialized value 
+* @return{SignedMessage} - message type
+*/
 function DESERIALIZE(data){
   return JSON.parse(data, JSON_REVIVER_FUNC);
 }
 
+/** DESERIALIZE_AND_DECODE_MESSAGE - deserialize a received message and create the appropriate object type based on classType property
+* @param {string} data - serialized value 
+* @returns {SignedMessage} - message type
+*/
 function DESERIALIZE_AND_DECODE_MESSAGE(data){
   var jsonObj = DESERIALIZE(data);
   if(jsonObj.hasOwnProperty("classType")){
@@ -82,18 +110,38 @@ function DESERIALIZE_AND_DECODE_MESSAGE(data){
   }
   throw new Error("Invalid Message: not a recoginized GOT message type");
 }
-//Messages that merely require signing extend this Base Class
+
+/**
+ * Signature Type defintion from ethereumjs
+ * @typedef {Object} Signature
+ * @property {Buffer} r
+ * @property {Buffer} s
+ * @property {int} v
+ */
+
+/** @class SignedMessage - signed messag ebase class that generates a keccak256 hash and signs using ECDSA
+* @property {string} classType - base class type used for reflection 
+* @property {Signature} signature - the signature for this message
+*/
 class SignedMessage{
 
+  /** @constructor
+  * @param {object} options
+  * @param {Signature} [options.signature] - sets the signature of the message, useful during deserilaization of SignedMessage
+  */
   constructor(options){
     this.classType = this.constructor.name;
     this.signature = options.signature || null;
   }
-  //pack this object for signing
+  /** getHash - child classes must override implementation  
+  */
   getHash(){
     throw Error("unimplemented getHash()");
   }
 
+  /** sign - signs the message with the private key and sets the signature property 
+  * @param {Buffer} privateKey 
+  */ 
   sign(privateKey){
 
     //Geth and thus web3 prepends the string \x19Ethereum Signed Message:\n<length of message>
@@ -105,6 +153,9 @@ class SignedMessage{
     this.signature = util.ecsign(buffer,privateKey);
   }
 
+  /** _recoverAddress - recovers the ethereum address form the signature and message hash
+  * @returns {Buffer} - 20 byte Buffer representing the ethereum address
+  */ 
   _recoverAddress(){
      var buffer = this.getHash();
      var pk = util.ecrecover(buffer,this.signature.v,util.toBuffer(this.signature.r),util.toBuffer(this.signature.s));
@@ -112,13 +163,18 @@ class SignedMessage{
      return address;
   }
 
+   /** @property {Buffer} from - the calculate from based on the message hash and signature 
+   * @throws "no signature to recover address from"
+  */ 
   get from() {
     if(!this.signature){
       throw new Error("no signature to recover address from");
     }
     return this._recoverAddress();
   }
-
+   /** isSigned
+    * @returns {bool}
+   */ 
   isSigned(){
     return !(this.signature === null);
   }
