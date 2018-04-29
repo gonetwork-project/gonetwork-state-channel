@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 00:55:47
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-28 21:09:23
+* @Last Modified time: 2018-04-28 21:46:03
 */
 
 const messageLib = require('./message');
@@ -434,11 +434,11 @@ class Engine extends events.EventEmitter {
     var _peerAddress = peerAddress;
     return this.blockchain.newChannel(peerAddress,channelLib.SETTLE_TIMEOUT).then(function(vals) {
       // ChannelNew(address netting_channel,address participant1,address participant2,uint settle_timeout);
-      var channelAddress = vals[0];
-      var addressOne = vals[1];
-      var addressTwo = vals[2];
-      var timeout = vals[3];
-      self.onChannelNew(channelAddress,addressOne,addressTwo,timeout);
+      // var channelAddress = vals[0];
+      // var addressOne = vals[1];
+      // var addressTwo = vals[2];
+      // var timeout = vals[3];
+      //self.onChannelNew(channelAddress,addressOne,addressTwo,timeout);
     }).catch(function (err) {
       self.onChannelNewError(_peerAddress);
     });
@@ -466,7 +466,7 @@ class Engine extends events.EventEmitter {
     return this.blockchain.closeChannel(channelAddress,proof).then(function(closingAddress){
       //channelAddress,closingAddress,block
       //TODO: @Artur, only call this after the transaction is mined i.e. txMulitplexer 
-      return self.onChannelClose(_channelAddress,closingAddress);
+      // return self.onChannelClose(_channelAddress,closingAddress);
     }).catch(function(error){
       return self.onChannelCloseError(_channelAddress);
     });
@@ -492,7 +492,7 @@ class Engine extends events.EventEmitter {
     var _channelAddress = channelAddress;
     
     return this.blockchain.updateTransfer(channelAddress, proof).then(function(nodeAddress){
-      self.onTransferUpdated(nodeAddress)
+      //self.onTransferUpdated(nodeAddress)
     }).catch(function(err) {
       self.onTransferUpdatedError(_channelAddress);
     })
@@ -523,10 +523,10 @@ class Engine extends events.EventEmitter {
         var self = this;
         var promise = this.blockchain.withdrawLock(channelAddress,p.encodeLock(),p.merkleProof,_secret)
         .then(function(vals){
-          var secret = vals[0];
-          var receiverAddress = vals[1];
-           //channelAddress, secret, receiverAddress,block
-           return self.onChannelSecretRevealed(_channelAddress,secret,receiverAddress)
+          // var secret = vals[0];
+          // var receiverAddress = vals[1];
+          //  //channelAddress, secret, receiverAddress,block
+          //  return self.onChannelSecretRevealed(_channelAddress,secret,receiverAddress)
         })
         .catch(function(err){              
            return self.onChannelSecretRevealedError(_channelAddress,_secret);
@@ -557,7 +557,7 @@ class Engine extends events.EventEmitter {
     channel.issueSettle(this.currentBlock);
     var _channelAddress = channelAddress;
     return self.blockChain.settle(_channelAddress).then(function () {
-      return self.onChannelSettled(_channelAddress);
+      //return self.onChannelSettled(_channelAddress);
     }).catch(function(err){
       return self.onChannelSettledError(_channelAddress);
     });
@@ -583,11 +583,11 @@ class Engine extends events.EventEmitter {
     var _channelAddress = channelAddress;
     var self = this;
     return self.blockChain.depoist(_channelAddress,amount).then(function (vals) {
-      //event ChannelNewBalance(address token_address, address participant, uint balance);
-      var tokenAddress = vals[0];
-      var nodeAddress = vals[1];
-      var balance = vals[2];
-      return self.onChannelNewBalance(_channelAddress,nodeAddress,balance);
+      // event ChannelNewBalance(address token_address, address participant, uint balance);
+      // var tokenAddress = vals[0];
+      // var nodeAddress = vals[1];
+      // var balance = vals[2];
+      // return self.onChannelNewBalance(_channelAddress,nodeAddress,balance);
     }).catch(function(err){
       return self.onChannelNewBalanceError(_channelAddress);
     });
@@ -609,11 +609,11 @@ class Engine extends events.EventEmitter {
     return self.blockChain.approve(self.blockchain.tokenAddress,channel.channelAddress,amount)
     .then(function (vals) {
       //event Approval(address indexed _owner, address indexed _spender, uint256 _value);
-      var owner = vals[0];
-      var spender = vals[1];
-      var value = vals[2];
+      // var owner = vals[0];
+      // var spender = vals[1];
+      // var value = vals[2];
      
-      return self.onApproval(owner,spender,value);
+      // return self.onApproval(owner,spender,value);
     }).catch(function(err){
       return self.onApprovalError(_channelAddress);
     });
@@ -630,10 +630,10 @@ class Engine extends events.EventEmitter {
       amount)
     .then(function (vals) {
       //event Approval(address indexed _owner, address indexed _spender, uint256 _value);
-      var owner = vals[0]; 
-      var spender = vals[1];
-      var value = vals[2];
-      return self.onApproval(owner,spender,value);
+      // var owner = vals[0]; 
+      // var spender = vals[1];
+      // var value = vals[2];
+      // return self.onApproval(owner,spender,value);
     }).catch(function(err){
       return self.onApprovalError();
     });
