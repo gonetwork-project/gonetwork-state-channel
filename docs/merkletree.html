@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Namespace: merkletree</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Namespace: merkletree</h1>
+
+    
+
+
+
+
+<section>
+
+<header>
+    
+        <h2>merkletree</h2>
+        
+    
+</header>
+
+<article>
+    <div class="container-overview">
+    
+        
+
+        
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="merkletree.js.html">merkletree.js</a>, <a href="merkletree.js.html#line10">line 10</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+        
+    
+    </div>
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Classes</h3>
+
+        <dl>
+            <dt><a href="merkletree.MerkleTree.html">MerkleTree</a></dt>
+            <dd></dd>
+        </dl>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Methods</h3>
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id=".checkMerkleProof"><span class="type-signature">(static) </span>checkMerkleProof<span class="signature">(proof, root, element)</span><span class="type-signature"> &rarr; {bool}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    checkMerkleProof - return true if the supplied merkle proof and element equate to the root element
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>proof</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Array.&lt;Buffer></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">an array of bytes32 elements that represent the merkle proof</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>root</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">bytes32 of the root of the merkleTree</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>element</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">hashed bytes32 leaf element to prove exists in the tree</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="merkletree.js.html">merkletree.js</a>, <a href="merkletree.js.html#line255">line 255</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">bool</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id=".concatBuffer"><span class="type-signature">(static) </span>concatBuffer<span class="signature">(a, b, ordered)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    concatBuffer - concat two buffers in byte order or in the order supplied depneding on the order flag
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>a</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>b</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>ordered</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">bool</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">if true, concats a+b, if false then Buffer.compare sort a and b and then concat</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="merkletree.js.html">merkletree.js</a>, <a href="merkletree.js.html#line113">line 113</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    (Buffer)
+</div>
+
+
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id=".printTree"><span class="type-signature">(static) </span>printTree<span class="signature">(merkletree)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Internal printTree - function to pretty print each of the log(n) levels that make up the merkle tree
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>merkletree</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">MerkleTree</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="merkletree.js.html">merkletree.js</a>, <a href="merkletree.js.html#line265">line 265</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+    
+
+    
+
+    
+</article>
+
+</section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Channel_.html">Channel</a></li><li><a href="channel.OpenLockProof.html">OpenLockProof</a></li><li><a href="ChannelState.html">ChannelState</a></li><li><a href="Engine.html">Engine</a></li><li><a href="MediatedTransferState.html">MediatedTransferState</a></li><li><a href="merkletree.MerkleTree.html">MerkleTree</a></li><li><a href="message.Ack.html">Ack</a></li><li><a href="message.DirectTransfer.html">DirectTransfer</a></li><li><a href="message.Hashable.html">Hashable</a></li><li><a href="message.Lock.html">Lock</a></li><li><a href="message.LockedTransfer.html">LockedTransfer</a></li><li><a href="message.MediatedTransfer.html">MediatedTransfer</a></li><li><a href="message.OpenLock.html">OpenLock</a></li><li><a href="message.Proof.html">Proof</a></li><li><a href="message.ProofMessage.html">ProofMessage</a></li><li><a href="message.RequestSecret.html">RequestSecret</a></li><li><a href="message.RevealSecret.html">RevealSecret</a></li><li><a href="message.SecretToProof.html">SecretToProof</a></li><li><a href="message.SignedMessage.html">SignedMessage</a></li><li><a href="MessageState.html">MessageState</a></li><li><a href="stateMachine.InitiatorFactory.html">InitiatorFactory</a></li><li><a href="stateMachine.TargetFactory.html">TargetFactory</a></li></ul><h3>Namespaces</h3><ul><li><a href="channel.html">channel</a></li><li><a href="merkletree.html">merkletree</a></li><li><a href="message.html">message</a></li><li><a href="stateMachine.html">stateMachine</a></li></ul><h3><a href="global.html">Global</a></h3>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Sun Apr 29 2018 00:24:37 GMT-0500 (EST)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

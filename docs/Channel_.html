@@ -1,0 +1,3346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Class: Channel</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Class: Channel</h1>
+
+    
+
+
+
+
+<section>
+
+<header>
+    
+        <h2><span class="attribs"><span class="type-signature"></span></span>Channel<span class="signature">(peerState, myState, channelAddress, currentBlock)</span><span class="type-signature"></span></h2>
+        
+            <div class="class-description">Channel represents the states between two participants.  State synchronization occurs against channel endpoints.
+Channels rely on monotonically increasing simplex channels to track net value transfer flux. Rather then leveraging Poon-Dryja style
+channels for value transfer with off-chain hashed time lock contracts, we prefer the Raiden Network style simplex channels.  The advantage of Raiden
+style channels is the counterparties are not punished for providing invalid or out of date lock proofs to the block-chain. From a game theoretic 
+perspective, since the value is monotonically increasing, a rational actor will attempt to send the most up to date and relevant proof to the blockchain. 
+However; this is  only effective for monotonically increasing
+value transfers.  For general state transfers where the value may vary wildly, we will subclass our LockedTransfer class towards Poon-Dryja implementation.  
+This scheme requires a deposit from both parties (i.e a COMMIT transaction) which is used as punishment for publishing invalidated hashLocks on the blockchain.
+This is enforced simply as with every new state transfer, a new secret is generated and the old secret is revealed by the party creating the updates.
+Much care must be given to the order of the operations and the counterparties actions in any of the implementations.  Our design decision relies 
+on mass consumer adoption; i.e. it is likely users will lose proof messages (lost phones, forgotten passwords, hardware failures), and they shouldn't
+be further punished by the blockchain as they already have lost value due to a stale proof.</div>
+        
+    
+</header>
+
+<article>
+    <div class="container-overview">
+    
+        
+
+    
+    <h2>Constructor</h2>
+    
+
+    
+    <h4 class="name" id="Channel"><span class="type-signature"></span>new Channel<span class="signature">(peerState, myState, channelAddress, currentBlock)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>peerState</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">The initialized ChannelState object representing a peer.</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>myState</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">The initialized ChannelState object representing my state.</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>channelAddress</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Bytes</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">The on chain netting channel ethereum contract address.</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">The current block number on ethereum.</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+    <h5 class="subsection-title">Properties:</h5>
+
+    
+
+<table class="props">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>peerState</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">peer endpoint state</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>myState</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">my endpoint state</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>channelAddress</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">the Ethereum NettingChannel Contract Address for this channel</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>openedBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">the block the channel was opened</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>closedBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                    null
+                
+                </td>
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>settledBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                    null
+                
+                </td>
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>issuedCloseBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                    null
+                
+                </td>
+            
+
+            <td class="description last">the block the channel issuedCloseBlock, null if you never issue</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>issuedTransferUpdateBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                    null
+                
+                </td>
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>issuedSettleBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                    null
+                
+                </td>
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>updatedProofBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                    null
+                
+                </td>
+            
+
+            <td class="description last">the block you sent your proof message to the on-chain netting channel, null if your partner never send you value transfers</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>withdrawnLocks</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object.&lt;string, int></span>
+
+
+            
+            </td>
+
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">the state of the on-chain withdraw proof</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line61">line 61</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+    <dt class="tag-see">See:</dt>
+    <dd class="tag-see">
+        <ul>
+            <li><a href="https://en.bitcoin.it/wiki/Payment_channels%20for%20further%20details%20of%20implementation%20strategies.">https://en.bitcoin.it/wiki/Payment_channels for further details of implementation strategies.</a></li>
+        </ul>
+    </dd>
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    </div>
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Members</h3>
+
+        
+            
+<h4 class="name" id="state"><span class="type-signature"></span>state<span class="type-signature"></span></h4>
+
+
+
+
+
+
+
+
+
+
+    <h5 class="subsection-title">Properties:</h5>
+
+    
+
+<table class="props">
+    <thead>
+    <tr>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">return the current channel state</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line116">line 116</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+        
+    
+
+    
+        <h3 class="subsection-title">Methods</h3>
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="_withdrawPeerOpenLocks"><span class="type-signature"></span>_withdrawPeerOpenLocks<span class="signature">()</span><span class="type-signature"> &rarr; {channel.OpenLock}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Internal
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line497">line 497</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">channel.OpenLock</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="canIssueSettle"><span class="type-signature"></span>canIssueSettle<span class="signature">(currentBlock)</span><span class="type-signature"> &rarr; {bool}</span></h4>
+    
+
+    
+
+
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line449">line 449</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">bool</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="createDirectTransfer"><span class="type-signature"></span>createDirectTransfer<span class="signature">(msgID, amount)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    create a direct transfer from myState to peerState
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>msgID</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>amount</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line349">line 349</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+<h5>Throws:</h5>
+
+        
+
+    <div class="param-desc">
+    
+        "Insufficient funds: direct transfer cannot be completed:..."
+    
+    </div>
+
+
+    
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    message.DirectTransfer
+</div>
+
+
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="createLockedTransfer"><span class="type-signature"></span>createLockedTransfer<span class="signature">(msgID, hashLock, amount, expirationBlock, currentBlock)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    create a locked transfer from myState for peerState
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>msgID</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>hashLock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">the keccak256 hash of the secret</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>amount</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>expirationBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line321">line 321</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+<h5>Throws:</h5>
+
+        
+
+    <div class="param-desc">
+    
+        "Insufficient funds: lock amount must be less than or equal to transferrable amount"
+    
+    </div>
+
+
+    
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    message.LockedTransfer
+</div>
+
+
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="createMediatedTransfer"><span class="type-signature"></span>createMediatedTransfer<span class="signature">(msgID, hashLock, amount, expirationBlock, expirationBlock, target, initiator, currentBlock)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    create a mediated transfer from myState to target using the peerState as a mediator and is set as the to address.
+This holds if there exists a route in the 
+state channel network between myState and target through the peer
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>msgID</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>hashLock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">the keccak256 hash of the secret</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>amount</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>expirationBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>expirationBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>target</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">the intended recipient of the locked transfer.  This target node will make the RevealSecret request
+direction to the initiator</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>initiator</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">myState ethereum address</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line387">line 387</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    message.MediatedTransfer
+</div>
+
+
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="createSecretToProof"><span class="type-signature"></span>createSecretToProof<span class="signature">(msgID, secret)</span><span class="type-signature"> &rarr; {<a href="message.SecretToProof.html">message.SecretToProof</a>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Move an openLocks amount to the transferredAmount and remove from merkletree, this can increase channel longevity
+as openLocks will require on-chain withdrawals without this mechanism.
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>msgID</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>secret</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Buffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line404">line 404</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type"><a href="message.SecretToProof.html">message.SecretToProof</a></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="getChannelExpirationBlock"><span class="type-signature"></span>getChannelExpirationBlock<span class="signature">(currentBlock)</span><span class="type-signature"> &rarr; {BN}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    determine which absolute block number the settlement period ends
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line107">line 107</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">BN</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="handleRevealSecret"><span class="type-signature"></span>handleRevealSecret<span class="signature">(revealSecret)</span><span class="type-signature"> &rarr; {bool}</span></h4>
+    
+
+    
+
+
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>revealSecret</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="message.RevealSecret.html">message.RevealSecret</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line142">line 142</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+<h5>Throws:</h5>
+<ul>
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid Message: Expected RevealSecret"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid Secret: Unknown secret revealed"
+    
+    </div>
+
+</li>
+    </ul>
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    - true if applied
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">bool</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="handleTransfer"><span class="type-signature"></span>handleTransfer<span class="signature">(transfer, currentBlock)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>transfer</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="message.DirectTransfer.html">message.DirectTransfer</a></span>
+|
+
+<span class="param-type"><a href="message.LockedTransfer.html">message.LockedTransfer</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line176">line 176</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+<h5>Throws:</h5>
+<ul>
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid transfer: cannot update a closing channel"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid Transfer: unknown from"
+    
+    </div>
+
+</li>
+    </ul>
+
+
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="handleTransferFromTo"><span class="type-signature"></span>handleTransferFromTo<span class="signature">(from, to, transfer, currentBlock)</span><span class="type-signature"> &rarr; {bool}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    process a transfer in the direction of from > to channelState
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>from</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">transfer originator</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>to</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">transfer recipient</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>transfer</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="message.DirectTransfer.html">message.DirectTransfer</a></span>
+|
+
+<span class="param-type"><a href="message.LockedTransfer.html">message.LockedTransfer</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line209">line 209</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+<h5>Throws:</h5>
+<ul>
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid Transfer Type"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid Channel Address: channel address mismatch"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid nonce: Nonce must be incremented by 1"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid Lock: Lock registered previously"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid LocksRoot for LockedTransfer"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid Lock: Lock amount must be greater than 0"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid SecretToProof: unknown secret"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid LocksRoot for SecretToProof:..."
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid transferredAmount: must be monotonically increasing value"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid transferredAmount: SecretToProof does not provide expected lock amount"
+    
+    </div>
+
+</li>
+    
+        <li>
+
+    <div class="param-desc">
+    
+        "Invalid transferredAmount: Insufficient Balance:..."
+    
+    </div>
+
+</li>
+    </ul>
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    - true if transfer applied to channelState
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">bool</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="incrementedNonce"><span class="type-signature"></span>incrementedNonce<span class="signature">()</span><span class="type-signature"> &rarr; {BN}</span></h4>
+    
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line308">line 308</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    incremented nonce
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">BN</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="isOpen"><span class="type-signature"></span>isOpen<span class="signature">()</span><span class="type-signature"> &rarr; {bool}</span></h4>
+    
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line133">line 133</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    returns true iff the channel is open
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">bool</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="onBlock"><span class="type-signature"></span>onBlock<span class="signature">(currentBlock)</span><span class="type-signature"> &rarr; {Array.&lt;string>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    handle a block update
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line431">line 431</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+    <dt class="tag-see">See:</dt>
+    <dd class="tag-see">
+        <ul>
+            <li>Engine.handleEvent</li>
+        </ul>
+    </dd>
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    - GOT.* events to be processed
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Array.&lt;string></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="transferrableFromTo"><span class="type-signature"></span>transferrableFromTo<span class="signature">(from, to, currentBlock)</span><span class="type-signature"> &rarr; {BN}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    The amount of funds that can be sent from -> to in the payment channel at a particular block.
+The block is important as locks expire those funds are made available again
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>from</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>to</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="ChannelState.html">ChannelState</a></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>currentBlock</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">BN</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">The current block number</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="channel.js.html">channel.js</a>, <a href="channel.js.html#line93">line 93</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">BN</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+    
+
+    
+
+    
+</article>
+
+</section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Channel_.html">Channel</a></li><li><a href="channel.OpenLockProof.html">OpenLockProof</a></li><li><a href="ChannelState.html">ChannelState</a></li><li><a href="Engine.html">Engine</a></li><li><a href="MediatedTransferState.html">MediatedTransferState</a></li><li><a href="merkletree.MerkleTree.html">MerkleTree</a></li><li><a href="message.Ack.html">Ack</a></li><li><a href="message.DirectTransfer.html">DirectTransfer</a></li><li><a href="message.Hashable.html">Hashable</a></li><li><a href="message.Lock.html">Lock</a></li><li><a href="message.LockedTransfer.html">LockedTransfer</a></li><li><a href="message.MediatedTransfer.html">MediatedTransfer</a></li><li><a href="message.OpenLock.html">OpenLock</a></li><li><a href="message.Proof.html">Proof</a></li><li><a href="message.ProofMessage.html">ProofMessage</a></li><li><a href="message.RequestSecret.html">RequestSecret</a></li><li><a href="message.RevealSecret.html">RevealSecret</a></li><li><a href="message.SecretToProof.html">SecretToProof</a></li><li><a href="message.SignedMessage.html">SignedMessage</a></li><li><a href="MessageState.html">MessageState</a></li><li><a href="stateMachine.InitiatorFactory.html">InitiatorFactory</a></li><li><a href="stateMachine.TargetFactory.html">TargetFactory</a></li></ul><h3>Namespaces</h3><ul><li><a href="channel.html">channel</a></li><li><a href="merkletree.html">merkletree</a></li><li><a href="message.html">message</a></li><li><a href="stateMachine.html">stateMachine</a></li></ul><h3><a href="global.html">Global</a></h3>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Sun Apr 29 2018 00:24:37 GMT-0500 (EST)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
