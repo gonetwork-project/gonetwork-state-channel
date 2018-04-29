@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 00:55:47
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-26 03:44:07
+* @Last Modified time: 2018-04-28 21:09:23
 */
 
 const messageLib = require('./message');
@@ -12,17 +12,31 @@ const stateMachineLib = require('./stateMachine/stateMachine');
 const util = require('ethereumjs-util');
 const events = require('events');
 
+
 /** 
-* GoNetworks Engine encapsualtes off chain interactions between clients and propogation onto the blockchain 
-* @extends events.EventEmitter 
+* @class GoNetworks Engine encapsualtes off chain interactions between clients and propogation onto the blockchain.  
+* The Engine is platform agnostic and adaptble to different blockchains by providing appropriate blockchainService adapters
+* Overriding the send callback also allows for custom transport layers and methods (not neccessarily IP network based)
+* @extends events.EventEmitter
+* @property {BN} msgID=0
+* @property {BN} currentBlock=0 - the current block which is synchronized to the onchain mined block value via blockchainService handler callbacks
+* @property {Buffer} publicKey - Future Use: ElGamal Elliptic Curve Asymmetric Encryption public key to be sent to channel partners
+* @property {InitiatorFactory} initiatorStateMachine=stateMachine.IntiatorFactory - creates a new state machine for mediated transfers you initiate
+* @property {TargetFactory} targeStateMachine=stateMachine.TargetFactory - creates a new state machine for mediated transfers that are intended for you 
+* @property {object} messageState={} - tracks the state of mediated transfer messages using msgID as the key i.e. this.messageState[msgID] = stateMachine.*
+* @property {object} channelByPeer={} - channels by peers ethereum address as hex string no 0x prefix 
+* @property {object} channels={} - channels by on-chain contract address hex string no 0x prefix
+* @property {object} pendingChannels={} - used to track newChannel requests initiated by the engine
+* @property {function} signatureService 
+* @property {object} blockchain
 */
 class Engine extends events.EventEmitter {
 
   /**
-   * Create Engine.
-   * @param {Buffer} address - your ethereum address.
-   * @param {Function} signatureService - the callback that requests the privatekey for signing of messages.
-   * @param {BlockchainService} blockchainService - a class extending the BlockchainService interface to monitor and propogate transactions on chain.
+   * @constructror.
+   * @param {Buffer} address - your ethereum address; ETH Address is merely the last 20 bytes of the keccak256 hash of the public key given the public private key pair.
+   * @param {Function} signatureService - the callback that requests the privatekey for signing of messages.  This allows the user to store the private key in a secure store or other means
+   * @param {BlockchainService} blockchainService - a class extending the BlockchainService class to monitor and propogate transactions on chain. Override for different Blockchains
    */
   constructor(address,signatureService,blockchainService){
     super();
@@ -61,7 +75,10 @@ class Engine extends events.EventEmitter {
 
   /**
      * Handle an incoming message after it has been deserialized
-     * @param {message.SignedMessage} message.
+     * @param {message.SignedMessage} message
+     * @returns {message.Ack}
+     * @throws "Invalid Message: no signature found"
+     * @throws "Invalid Message: uknown message received"
      */
   onMessage(message){
     //TODO: all messages must be signed here?
@@ -201,13 +218,15 @@ class Engine extends events.EventEmitter {
   }
 
   /**
-     * Send a locked transfer to your channel partner
+     * Send a locked transfer to your channel partner. This method intiatlizes a initator state machine which will queue the message for send via handleEvent
      * @param {Buffer} to - eth address who this message will be sent to.  Only differs from target if mediating a transfer
      * @param {Buffer} target - eth address of the target.
      * @param {BN} amount - amount to lock and send.
      * @param {BN} expiration - the absolute block number this locked transfer expires at.
      * @param {Buffer} secret - Bytes32 cryptographic secret
      * @param {Buffer} hashLock - Bytes32 keccak256(secret) value.
+     * @throws "Invalid MediatedTransfer: channel does not exist"
+     * @throws 'Invalid Channel State:state channel is not open'
      */
   sendMediatedTransfer(to,target,amount,expiration,secret,hashLock){
     if(!this.channelByPeer.hasOwnProperty(to.toString('hex'))){
@@ -239,9 +258,11 @@ class Engine extends events.EventEmitter {
 
 
   /**
-     * Send a direct transfer to your channel partner
+     * Send a direct transfer to your channel partner.  This method calls send(directTransfer) and applies the directTransfer to the local channel state.
      * @param {Buffer} to - eth address who this message will be sent to.  Only differs from target if mediating a transfer
      * @param {Buffer} transferredAmount - the monotonically increasing amount to send.  This value is set by taking the previous transferredAmount + amount you want to transfer.
+     * @throws "Invalid MediatedTransfer: unknown to address"
+     * @throws 'Invalid DirectTransfer:state channel is not open'
      */
   sendDirectTransfer(to,transferredAmount){
     if(!this.channelByPeer.hasOwnProperty(to.toString('hex'))){
@@ -264,21 +285,19 @@ class Engine extends events.EventEmitter {
   }
 
 
-  /**
-     * Send message 
-     * @param {message.SignedMessage} msg - a signed message type that requires transport
-     * Override this function to define different transport channels and use cases
-     * i.e integrate this with TELEGRAMS
-     * Api and securely transfer funds between users on telegram or
-     * generate qrcodes for revelSecret message
-     * or implement webRTC p2p protocol for transport etc. 
+  /**Send the message. Override this function to define different transport channels
+     * e.g integrate this with TELEGRAMS Api and securely transfer funds between users on telegram.
+     * Generate qrcodes for revelSecret message
+     * or implement webRTC p2p protocol for transport etc.
+     * @param {message} msg - A message implementation in the message namespace 
      */
   send(msg){
     console.log("SENDING:"+messageLib.SERIALIZE(msg));
   }
 
-  /*** Internal Event Handlers Triggered by state-machine workflows
-  * handleEvent dispatches events generated by internal block time keeping updates of the engine
+  /*** Internal event handlers triggered by state-machine workflows and blockchain events
+  * @param {string} event - the GOT.* namespaced event triggered by the engine
+  * @params {object} state - the accompanying object state 
   */
   handleEvent(event, state){
     try{
@@ -359,15 +378,17 @@ class Engine extends events.EventEmitter {
     }
   }
 
-   /*** Internal Error Handler Triggered by errors encountered by handleEvent  */
+   /*** Internal error handler triggered by errors encountered by handleEvent  
+    * @param {Error} err - the error caught during handleEvent execution
+   */
   handleError(err){
     console.error(err);
   }
    
-  /*** Internal Blockchain callback functions
-  * The following handlers are called by the blockchain service implementation to 
-  * inform the engine of time progression via block number increments and various 
-  * actions taken on the blockchain with respect to the state channel management
+  /*** Blockchain callback when a new block is mined and blockNumber increases.  
+  *This informs the engine of time progression via block number increments crucial for lockedtransfer
+  * and channel lifecycle management
+  * @param {BN} block - the latest mined block
   */
   onBlock(block){
     if(block.lt(this.currentBlock)){
@@ -396,6 +417,11 @@ class Engine extends events.EventEmitter {
     });
   }
 
+  /** Create a new channel given the peer ethereum address 
+  * @param {Buffer} peerAddress - eth address
+  * @returns {Promise} - the promise is settled when the channel is mined.  If there is an error during any point of execution in the mining
+  * the onChannelNewError(peerAddress) is called
+  */
   newChannel(peerAddress){
     //is this a blocking call?
     if(!this.pendingChannels.hasOwnProperty(peerAddress.toString('hex')) &&
@@ -419,6 +445,11 @@ class Engine extends events.EventEmitter {
     
   };
 
+   /** close a channel given the peer ethereum address.  The close proof in the state is transferred during the call to close.
+  * @param {Buffer} channelAddress - the on-chain nettingchannel address of the channel
+  * @returns {Promise} - the promise is settled when the channel close request is mined.  If there is an error during any point of execution in the mining
+  * the onChannelCloseError(channelAddress) is called
+  */
   closeChannel(channelAddress){
     if(!this.channels.hasOwnProperty(channelAddress.toString('hex'))){
       throw new Error("Invalid Close: unknown channel");
@@ -443,6 +474,11 @@ class Engine extends events.EventEmitter {
     
   }
 
+  /** Update the proof after you learn a channel has been closed by the channel counter party 
+  * @param {Buffer} channelAddress - the on-chain nettingchannel address of the channel
+  * @returns {Promise} - the promise is settled when the channel close request is mined.  If there is an error during any point of execution in the mining
+  * the onTransferUpdatedError(channelAddress) is called
+  */
   transferUpdate(channelAddress){
     if(!this.channels.hasOwnProperty(channelAddress.toString('hex'))){
       throw new Error("Invalid TransferUpdate: unknown channel");
@@ -463,6 +499,12 @@ class Engine extends events.EventEmitter {
     
   }
 
+   /** Issue withdraw proofs on-chain for locks that have had their corresponding secret revealed.  Locks can be settled on chain once a proof has been sent on-chain.
+   * Locks can only be withdrawn once.
+  * @param {Buffer} channelAddress - the on-chain nettingchannel address of the channel
+  * @returns {Promise} - the promise is settled when the channel close request is mined.  If there is an error during any point of execution in the mining
+  * the onChannelSecretRevealedError(channelAddress) is called for each lock that was not successfully withdrawn on-chain and must be reissued
+  */
   withdrawPeerOpenLocks(channelAddress){
     if(!this.channels.hasOwnProperty(channelAddress.toString('hex'))){
       throw new Error("Invalid Withdraw: unknown channel");
@@ -495,6 +537,12 @@ class Engine extends events.EventEmitter {
     
   }
 
+  /** Settle the channel on-chain after settle_timeout time has passed since closing, unlocking the on-chain collateral and distributing the funds
+  * according to the proofs and lock withdrawals on chain. 
+  * @param {Buffer} channelAddress - the on-chain nettingchannel address of the channel
+  * @returns {Promise} - the promise is settled when the channel close request is mined.  If there is an error during any point of execution in the mining
+  * the onChannelSettledError(channelAddress) is called
+  */
   settleChannel(channelAddress){
     if(!this.channels.hasOwnProperty(channelAddress)){
       throw new Error("Invalid Settle: unknown channel");
@@ -515,6 +563,15 @@ class Engine extends events.EventEmitter {
     });
   }
 
+  /** Deposit an amount of the ERC20 token into the channel on-chain.  After the transaction is mined successfully,
+  * that amount will be available for net transfer in the channel. This is effectively the collateral locked up during the 
+  * channel lifetime and cannot be freed until the channel is closed and settled.
+  * @param {Buffer} channelAddress - the on-chain nettingchannel address of the channel
+  * @param {BN} amount - the amount of the ERC20 token to deposit.  The maxium amount of the cumulative deposits is determined by the allowance setup for the channel.
+  * @see Engine.approveChannel
+  * @returns {Promise} - the promise is settled when the channel close request is mined.  If there is an error during any point of execution in the mining
+  * the onChannelNewBalanceError(channelAddress) is called
+  */
   depositChannel(channelAddress,amount){
     if(!this.channels.hasOwnProperty(channelAddress)){
       throw new Error("Invalid Settle: unknown channel");
@@ -536,6 +593,13 @@ class Engine extends events.EventEmitter {
     });
   }
 
+  /** approve the channel to take ERC20 deposits.  This must be called before a deposit can be made successfully.  This utlimately creates and allowance
+  * for the channel on the ERC20 contract.
+  * @param {Buffer} channelAddress - the on-chain nettingchannel address of the channel
+  * @param {BN} amount - the maximum amount of the ERC20 token to allow the channel to transfer when making a deposit.  
+  * @returns {Promise} - the promise is settled when the channel close request is mined.  If there is an error during any point of execution in the mining
+  * the onApprovalError(channelAddress) is called
+  */
   approveChannel(channelAddress,amount){
     if(!this.channels.hasOwnProperty(channelAddress)){
       throw new Error("Invalid approve Channel: unknown channel");
@@ -555,7 +619,11 @@ class Engine extends events.EventEmitter {
     });
   }
 
-
+  /** Approve the channelManager to take the flat fee in GOT ERC20 tokens when a channel is created.  This only needs to be called once when the engine is initialized
+  * @param {BN} amount - the maximum allowance of GOT ERC20 tokens to allow the channelManager to transfer.  
+  * @returns {Promise} - the promise is settled when the channel close request is mined.  If there is an error during any point of execution in the mining
+  * the onApprovalError() is called
+  */
   approveChannelManager(amount){
     return self.blockChain.approve(self.blockchain.gotokenAddress,
       self.blockchain.chanelManagerAddress,
@@ -571,6 +639,11 @@ class Engine extends events.EventEmitter {
     });
   }
   
+  /** Callback when a ERC20 token approves someone for an allowance
+  * @param {String} owner - ethereum address hexString
+  * @param {String} spender - ethereum address hexString
+  * @param {BN} value - the allowance that was set
+  */
   onApproval(owner,spender,value){
     return true;
   };
@@ -579,7 +652,12 @@ class Engine extends events.EventEmitter {
     return true;
   }
 
-  //handle blockchain events from blockchain service
+  /** Callback when a new channel is created by the channel manager
+  * @param {String} channelAddress - ethereum address hexString
+  * @param {String} addressOne - ethereum address hexString
+  * @param {String} addressTwo - ethereum address hexString
+  * @param {BN} settleTimeout- the settle_timeout for the channel
+  */
   onChannelNew(channelAddress,addressOne,addressTwo,settleTimeout){
     var peerAddress = null;
     if(addressOne.compare(this.address)===0){
@@ -625,6 +703,11 @@ class Engine extends events.EventEmitter {
     //TODO: emit UnableToCreate Channel with Peer
   }
 
+  /** Callback when a channel has tokens deposited into it on-chain
+  * @param {String} channelAddress - ethereum address hexString
+  * @param {String} address - the particpants ethereum address in hexString who deposited the funds
+  * @param {String} balance - the new deposited balance for the participant in the channel
+  */
   onChannelNewBalance(channelAddress,address,balance){
     this.channels[channelAddress.toString('hex')].onChannelNewBalance(address,balance);
     return true;
@@ -634,6 +717,10 @@ class Engine extends events.EventEmitter {
     return false;
   }
 
+  /** Callback when a  channel is closed on chain identifying which of the partners initiated the close
+  * @param {String} channelAddress - ethereum address hexString
+  * @param {String} closingAddress - ethereum address hexString
+  */
   onChannelClose(channelAddress,closingAddress){
 
    var channel = this.channels[channelAddress.toString('hex')];
@@ -650,6 +737,10 @@ class Engine extends events.EventEmitter {
     return channel.onChannelCloseError();
   }
 
+  /** Callback when a the counterpary has updated their transfer proof on-chain
+  * @param {String} channelAddress - ethereum address hexString
+  * @param {String} nodeAddress - the party who submitted the proof
+  */
   onTransferUpdated(channelAddress,nodeAddress){
     return this.channels[channelAddress.toString('hex')].onTransferUpdated(nodeAddress,this.currentBlock);
   }
@@ -658,6 +749,9 @@ class Engine extends events.EventEmitter {
     return this.channels[channelAddress.toString('hex')].onTransferUpdatedError();
   }
 
+  /** Callback when a channel is settled on-chain
+  * @param {String} channelAddress - ethereum address hexString
+  */
   onChannelSettled(channelAddress){
     return this.channels[channelAddress.toString('hex')].onChannelSettled(this.currentBlock);
   }
@@ -665,6 +759,13 @@ class Engine extends events.EventEmitter {
    return this.channels[channelAddress.toString('hex')].onChannelSettledError();;
   }
 
+  /** Callback when a lock has been withdrawn on-chain.  If a user was withholding the secret in a mediate transfer,
+  * the party can now unlock the pending locks in the other channels.  This is why it is essential in a mediated transfer setting
+  * that each hop decrements the expiration by a safe margin such that they may claim a lock off chain in case of byzantine faults
+  * @param {String} channelAddress - ethereum address hexString
+  * @param {String} secret - the 32 byte secret in hexString
+  * @param {String} receiverAddress - ethereum address hexString which unlocked the lock on-chain
+  */
   onChannelSecretRevealed(channelAddress, secret, receiverAddress){
     return this.channels[channelAddress.toString('hex')].onChannelSecretRevealed(secret,receiverAddress,this.currentBlock);
   };
@@ -672,6 +773,13 @@ class Engine extends events.EventEmitter {
     return this.channels[channelAddress.toString('hex')].onChannelSecretRevealedError(secret);
   };
 
+  /** Callback when a channel has been closed and the channel lifetime exceeds the refund interval.
+  * i.e. channel.closedBlock - channel.openedBlock > refundInterval.  This is in hopes to incentives longer lived state channels
+  * by reducing the cost of their deployment for longer periods.
+  * @param {String} channelAddress - ethereum address hexString
+  * @param {String} receiverAddress - ethereum address hexString of the party that received the refund
+  * @param {BN} amount- the amount of GOT refunded
+  */
   onRefund(channelAddress,receiverAddress,amount){
     return true;
   }
