@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-09 12:58:48
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-18 00:53:10
+* @Last Modified time: 2018-04-28 23:41:07
 */
 
 const machina = require('machina');
@@ -10,6 +10,9 @@ const message = require('../message');
 const channel = require('../channel');
 const util = require('ethereumjs-util');
 
+/** @namespace stateMachine */
+
+/** @class encapsulate state machine transitions */
 class MessageState{
   constructor(state,stateMachine){
     this.state = state;//message.*
@@ -22,8 +25,7 @@ class MessageState{
 
 }
 
-//State change can only occur after a mutating action has taken place upstream
-//the transitions merely emit further actions.
+/** @class Internal encapsulate mediated transfer state*/ 
 class MediatedTransferState extends message.MediatedTransfer{
   constructor(options){
     super(options);
@@ -37,6 +39,11 @@ class MediatedTransferState extends message.MediatedTransfer{
 
 }
 
+/** @class factory handles the initiators lifecycle events for a mediated transfer.
+*State changes can only occur after a mutating action has taken place in the engine.  the transitions merely emit further actions.
+* @memberof stateMachine
+* @returns {machina.BehavioralFsm}
+* @see Engine.handleEvent*/
 const InitiatorFactory = function(){ return new machina.BehavioralFsm( {
 
     initialize: function() {
@@ -113,6 +120,11 @@ const InitiatorFactory = function(){ return new machina.BehavioralFsm( {
 
 }
 
+/** @class factory handles the targets lifecycle events for a mediated transfer
+* @memberof stateMachine
+* @returns {machina.BehavioralFsm}
+* @see Engine.handleEvent
+*/
 const TargetFactory = function(){ return new machina.BehavioralFsm( {
 
     initialize: function( ) {

@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 00:55:47
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-28 21:46:03
+* @Last Modified time: 2018-04-28 23:43:00
 */
 
 const messageLib = require('./message');
@@ -295,9 +295,9 @@ class Engine extends events.EventEmitter {
     console.log("SENDING:"+messageLib.SERIALIZE(msg));
   }
 
-  /*** Internal event handlers triggered by state-machine workflows and blockchain events
-  * @param {string} event - the GOT.* namespaced event triggered by the engine
-  * @params {object} state - the accompanying object state 
+  /** Internal event handlers triggered by state-machine workflows and blockchain events
+  * @param {string} event - the GOT.* namespaced event triggered asynchronously by external engine components i.e. stateMachine, on-chain event handlers,etc.
+  * @param {object} state - the accompanying object state 
   */
   handleEvent(event, state){
     try{

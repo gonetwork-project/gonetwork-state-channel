@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-13 15:16:52
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-18 00:48:10
+* @Last Modified time: 2018-04-28 22:44:44
 */
 
 const merkletree = require('./merkletree');
@@ -14,9 +14,19 @@ const message = require('./message');
 
 
 
-//Channel Endpoint state may not be updated directly, you must apply the appropriate message types
-//on the endstate.  The Ch
+/** @class channel state endpoint; each Channel is composed of two channel state represent both actors
+* @property {message.Proof} proof-the proof snapshot of this endpoint.  If this channel state represents the peer, this proof is submitted during
+* channel closing. 
+* @property {Object.<string,message.Lock>} pendingLocks - the pending locks that have not had their secrets revealed.  The key is the hashLock value
+* @property {Object.<string,message.OpenLock>} openLocks - the opened locks that have had their secrets revealed.  The key is the hashLock value
+* @property {merkletree.MerkleTree} merkleTree - the merkleTree based on the pending and open locks
+* @property {BN} depositBalance=0 - the amount of funds deposited on-chain by this channel state endpoint
+* @property {Buffer} address - the ethereum address of the particpant who's state this endpoint represents
+* @see Channel
+*/
 class ChannelState{
+  /** @constructor
+  * @param {object} options*/
   constructor(options){
     this.proof = options.proof || new message.ProofMessage({});
     //dictionary of locks ordered by hashLock key
@@ -28,22 +38,28 @@ class ChannelState{
     this.address = options.address || message.EMPTY_20BYTE_BUFFER;
   }
 
+  /** @property {BN} the nonce that ensures transfer ordering as retreived from the proof */
   get nonce(){
     return this.proof.nonce;
   }
 
+  /** @property {BN} the monotonically increasing transferredAmount retrieved from the proof */
   get transferredAmount(){
     return this.proof.transferredAmount;
   }
 
+  /** update the channel state to reflect locked transfer
+  * @param {(message.LockedTransfer|message.MediatedTransfer)}
+  * @throws "Invalid Message Type: DirectTransfer expected"
+  * @throws "Invalid Lock: lock already registered"
+  * @throws "Invalid hashLockRoot"
+  */
   applyLockedTransfer(lockedTransfer){
     if(!lockedTransfer instanceof message.LockedTransfer){
       throw new Error("Invalid Message Type: DirectTransfer expected");
     }
     var proof = lockedTransfer.toProof();
     var lock = lockedTransfer.lock;
-    //TODO check if lock is already contained
-    //throw new Error("Lock already applied");
     var hashLockKey = lock.hashLock.toString('hex');
     if(this.pendingLocks.hasOwnProperty(hashLockKey) || this.openLocks.hasOwnProperty(hashLockKey)){
       throw new Error("Invalid Lock: lock already registered");
@@ -58,18 +74,26 @@ class ChannelState{
     this.merkleTree = mt;
   }
 
+  /** update the channel state to reflect direct transfer
+  * @param {message.DirectTransfer}
+  * @throws "Invalid Message Type: DirectTransfer expected"
+  * @throws "Invalid hashLockRoot"
+  */
   applyDirectTransfer(directTransfer){
     if(!directTransfer instanceof message.DirectTransfer){
       throw new Error("Invalid Message Type: DirectTransfer expected");
     }
-    // console.log("APPLY DIRECT TRANSFER:"+ this.merkleTree.getRoot().toString('hex'));
-    // console.log("APPLY DIRECT TRANSFER:"+ directTransfer.locksRoot.toString('hex'));
     if(this.merkleTree.getRoot().compare(directTransfer.locksRoot)!==0){
       throw new Error("Invalid hashLockRoot");
     }
     this.proof = directTransfer.toProof();
   }
 
+  /** applies the secret to to unlock a pending lock
+  * @param {message.RevealSecret}
+  * @throws "Invalid Message Type: RevealSecret expected"
+  * @throws "Invalid Lock: uknown lock secret received"
+  */
   applyRevealSecret(revealSecret){
     if(!revealSecret instanceof message.RevealSecret){
       throw new Error("Invalid Message Type: RevealSecret expected");
@@ -89,6 +113,12 @@ class ChannelState{
     }
   }
 
+  /** removes the open lock and applies the locked amount to the transferredAmount allowing indefinte channel lifetime
+  * @param {message.SecretToProof}
+  * @throws "Invalid Message Type: SecretToProof expected"
+  * @throws "Invalid Lock: uknown lock secret received"
+  * @throws "Invalid hashLockRoot in SecretToProof"
+  */
   applySecretToProof(secretToProof){
     if(!secretToProof instanceof message.SecretToProof){
       throw new Error("Invalid Message Type: SecretToProof expected");
@@ -127,7 +157,10 @@ class ChannelState{
     this.proof = proof;
     this.merkleTree = mt;
   }
-
+   /** Internal computes merkle tree including a new leaf element
+   * @param {message.Lock}
+   * @returns {merkletree.MerkleTree}
+   */
    _computeMerkleTreeWithHashlock(lock){
       var mt = new merkletree.MerkleTree(Object.values(Object.assign({},this.pendingLocks, this.openLocks)).concat(lock).map(
         function (l) {
@@ -137,7 +170,10 @@ class ChannelState{
       mt.generateHashTree();
       return mt;
     }
-
+    /** Internal computes merkle tree  without a particular leaf element
+    * @param {message.Lock}
+    * @returns {merkletree.MerkleTree}
+    */
     _computeMerkleTreeWithoutHashlock(lock){
       var hashLockKey = lock.hashLock.toString('hex');
       var locks = Object.assign({}, this.pendingLocks, this.openLocks);
@@ -155,6 +191,11 @@ class ChannelState{
       return mt;
     }
 
+
+    /**retreive the lock corresponding to the keccak256 hash of the secret
+   * @param {Buffer} secret
+   * @returns {(message.Lock| message.OpenLock | null)}
+   */
     getLockFromSecret(secret){
       var hashLock = util.sha3(secret);
       var hashLockKey = hashLock.toString('hex');
@@ -167,11 +208,18 @@ class ChannelState{
       return null;
     }
 
+    /** determine if this channel has the lock in pending or open state 
+    * @param {message.Lock} lock
+    * @returns {bool}
+    */
     containsLock(lock){
       var hashLockKey = lock.hashLock.toString("hex");
       return this.pendingLocks.hasOwnProperty(hashLockKey) || this.openLocks.hasOwnProperty(hashLockKey);
     }
 
+    /** @property {BN} return the minimum lock expiration time across all open locks. This effectively give an upper bound for how long the channel
+    * can remain open unless the lock is converted to a transfer via message.SecretToProof message sent from counterparty.
+    */
     get minOpenLockExpiration(){
       return reduce(
       map(Object.values(this.openLocks),function  (lock) {
@@ -184,18 +232,30 @@ class ChannelState{
       },new util.BN(0));
     }
 
+    /** determine the amount of funds that are locked. The safeblock parameter is required if you want to prevent 
+    * channel exhaustion due to lock expirations.  
+    * @param {BN} safeBlock
+    * @returns {BN}
+    */
     lockedAmount(safeBlock){
       //we only want lockedAmounts that have not yet expired
       return this._lockAmount(Object.values(this.pendingLocks),safeBlock);
     }
 
+    /** the amount of funds that are unlocked and usable in the netting channel
+    * @returns {BN}
+    */
     unlockedAmount(){
        //we sort of disregard the expiration, the expiration of unlocked
        //locks forces an onchain settle more then anything
        return this._lockAmount(Object.values(this.openLocks));
     }
 
-
+    /** the total amount of funds that are availble regarding both locked and unlocked funds
+    * @param {message.Lock[]} locksArray
+    * @param {BN} safeBlock - safe expiration time
+    * @returns {BN}
+    */
     _lockAmount(locksArray,safeBlock){
 
       if(safeBlock){
@@ -214,15 +274,21 @@ class ChannelState{
      }
     }
 
+    /** Deprecated */
     balance(peerState){
       throw new Error("not implemented");
     }
 
+    /** Deprecated */
     transferrable(peerState){
       throw new Error("not implemented");
       this.balance(peerState).sub(this.lockedAmount);
     }
 
+    /** create a lock proof that maybe submitted for onchain withdrawal of lock during the settlement period
+    * @param {message.OpenLock} lock
+    * @returns {Buffer[]}
+    */ 
     generateLockProof(lock){
      var lockProof = this.merkleTree.generateProof(lock.getMessageHash());
      var verified = merkletree.checkMerkleProof(lockProof,this.merkleTree.getRoot(),lock.getMessageHash());
@@ -237,105 +303,6 @@ class ChannelState{
 module.exports= {
   ChannelState
 };
-
-
-// function ChannelState(options){
-//   this.proof = options.proofMessage || new message.ProofMessage();
-//   this.contractBalance = options.contractBalance || new util.BN(0);
-//   this.openLocks = options.openLocks || [];
-//   this.pendingLocks = options.pendingLocks || [];
-//   this.merkleTree = options.merkleTree || null;
-
-// }
-
-// ChannelState.prototype.lockedAmount = function() {
-//   return reduce(this.pendingLocks.concat(this.openLocks), function(lockedAmount,r){
-//     return r.amount + lockedAmount;
-//   })
-// };
-
-// ChannelState.prototype.balance = function(self, peerState){
-//   return this.contractBalance - this.transferredAmount + peerState.transferredAmount;
-// }
-
-// ChannelState.prototype.merkleRootWithLock = function(lock){
-//   var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks).push(lock), function(lock){
-//     return lock.pack();
-//   }));
-//   mt.generateHashTree();
-//   return mt.getRoot();
-// }
-
-// ChannelState.prototype.merkleRootWithoutLock = function(hashLock){
-//   throw new Error("Not yet implemented: merkletreeWithoutLock");
-// }
-
-// //Handle State Transitions by updating our state
-// ChannelState.prototype.registerLockTransfer = function(lockTransfer){
-//   var root = this.merkleRootWithLock(lock.pack());
-//   assert(hashLockRoot == root);
-//   this.pendingLocks.push(lock);
-
-//   var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks), function(lock){
-//     return lock.pack();
-//   }));
-//   mt.generateHashTree();
-//   this.merkleTree = mt;
-
-//   this.hashLockRoot = root;
-// }
-
-// //updated transferred amount directly
-// ChannelState.prototype.registerDirectTransfer = function(directTransfer){
-//   assert(this.transferredAmount < transferredAmount);
-//   this.transferredAmount = transferredAmount;
-//   this.nonce = this.nonce + 1;
-// }
-
-// //unlocks a pending lock if it known
-// ChannelState.prototype.registerSecret = function(secret){
-//   var hashLock = util.sha3(secret);
-//   var index = -1;
-//   for(var i =0; i < this.pendingLocks.length; i++){
-//     var lock = this.pendingLocks[i];
-//     if(lock.hashLock === hashLock){
-//       index = i;
-//       break;
-//     }
-//   }
-
-//   if(!index){
-//     throw new Error("uknown lock secret transmitted");
-//   }
-//   //updates array in place returns array of popped elements
-//   var pendingLock = this.pendingLocks.splice(i,1)[0];
-//   pendingLocks.secret = secret;
-//   this.openLocks.push(pendingLocks);
-// }
-
-
-// ChannelState.prototype.generateLockProof = function(hashLock){
-//   var mt = new MerkleTree(map(this.pendingLocks.concat(this.openLocks), function(lock){
-//     return lock.pack();
-//   }));
-//   mt.generateHashTree();
-//   assert(mt.getRoot().eq(this.hashLockRoot));
-//   //returns an array buffer to construct the proof
-//   return mt.generateProof(hashLock);
-// }
-
-
-// /**
-//  * determines a valid amount of payment that is transferrable between two endpoints of a channel.
-//  * @param {ChannelState} peerState
-//  */
-// ChannelState.prototype.transferrable = function(self, peerState){
-//   return this.balance(peerState) - this.lockedAmount();
-// }
-
-
-
-// module.exports = {ChannelState};
 
 
 

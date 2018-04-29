@@ -2,8 +2,10 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-26 13:32:41
+* @Last Modified time: 2018-04-28 23:33:08
 */
+
+/** @namespace channel */
 
 const message = require('./message');
 const channelState = require('./channelState');
@@ -11,24 +13,55 @@ const util = require('ethereumjs-util');
 
 //Transfers apply state mutations to the channel object.  Once a transfer is verified
 //we apply it to the Channel
+/** @memberof channel */
 const CHANNEL_STATE_IS_OPENING = 'opening';
+/** @memberof channel */
 const CHANNEL_STATE_IS_CLOSING = 'closing';
+/** @memberof channel */
 const CHANNEL_STATE_IS_SETTLING = 'settling';
+/** @memberof channel */
 const CHANNEL_STATE_CLOSED = 'closed';
+/** @memberof channel */
 const CHANNEL_STATE_OPEN = 'opened';
+/** @memberof channel */
 const CHANNEL_STATE_SETTLED = 'settled';
 
+/** @memberof channel */
 SETTLE_TIMEOUT = new util.BN(100);
 //the minimum amount of time we need from the expiration of a lock to safely unlock
 //this property should be negotiable by the users based on their level of conservantiveness
 //in addition to expection of settled locks
+/** @memberof channel */
 REVEAL_TIMEOUT = new util.BN(15);
 
-/** Class representing the state between two participants*/
+/** @class Channel represents the states between two participants.  State synchronization occurs against channel endpoints.
+* Channels rely on monotonically increasing simplex channels to track net value transfer flux. Rather then leveraging Poon-Dryja style
+* channels for value transfer with off-chain hashed time lock contracts, we prefer the Raiden Network style simplex channels.  The advantage of Raiden
+* style channels is the counterparties are not punished for providing invalid or out of date lock proofs to the block-chain. From a game theoretic 
+* perspective, since the value is monotonically increasing, a rational actor will attempt to send the most up to date and relevant proof to the blockchain. 
+* However; this is  only effective for monotonically increasing
+* value transfers.  For general state transfers where the value may vary wildly, we will subclass our LockedTransfer class towards Poon-Dryja implementation.  
+* This scheme requires a deposit from both parties (i.e a COMMIT transaction) which is used as punishment for publishing invalidated hashLocks on the blockchain.
+* This is enforced simply as with every new state transfer, a new secret is generated and the old secret is revealed by the party creating the updates.
+* Much care must be given to the order of the operations and the counterparties actions in any of the implementations.  Our design decision relies 
+* on mass consumer adoption; i.e. it is likely users will lose proof messages (lost phones, forgotten passwords, hardware failures), and they shouldn't
+* be further punished by the blockchain as they already have lost value due to a stale proof. 
+* @see https://en.bitcoin.it/wiki/Payment_channels for further details of implementation strategies.
+* @property {ChannelState} peerState - peer endpoint state
+* @property {ChannelState} myState - my endpoint state
+* @property {Buffer} channelAddress - the Ethereum NettingChannel Contract Address for this channel
+* @property {BN} openedBlock - the block the channel was opened
+* @property {BN} closedBlock=null 
+* @property {BN} settledBlock=null 
+* @property {BN} issuedCloseBlock=null - the block the channel issuedCloseBlock, null if you never issue
+* @property {BN} issuedTransferUpdateBlock=null 
+* @property {BN} issuedSettleBlock=null 
+* @property {BN} updatedProofBlock=null - the block you sent your proof message to the on-chain netting channel, null if your partner never send you value transfers
+* @property {Object.<string,int>} withdrawnLocks - the state of the on-chain withdraw proof  */
 class Channel{
 
   /**
-     * Create a Channel.
+     * @constructor
      * @param {ChannelState} peerState - The initialized ChannelState object representing a peer.
      * @param {ChannelState} myState - The initialized ChannelState object representing my state.
      * @param {Bytes} channelAddress - The on chain netting channel ethereum contract address.
@@ -50,12 +83,13 @@ class Channel{
 
 
   /**
-     * The amount of funds that can be sent from -> to in the payment channel at a particular block.
-     * The block is important as locks expire those funds are made available again
-     * @param {ChannelState} from -
-     * @param {ChannelState} to -
-     * @param {BN} currentBlock - The current block number on ethereum.
-     */
+  * The amount of funds that can be sent from -> to in the payment channel at a particular block.
+  * The block is important as locks expire those funds are made available again
+  * @param {ChannelState} from 
+  * @param {ChannelState} to 
+  * @param {BN} currentBlock - The current block number
+  * @returns {BN}
+  */
   transferrableFromTo(from,to,currentBlock){
     var safeBlock = null;
     if(currentBlock){
@@ -66,6 +100,10 @@ class Channel{
     .add(to.transferredAmount.add(to.unlockedAmount()));
   }
 
+  /** determine which absolute block number the settlement period ends
+  * @param {BN} currentBlock
+  * @returns {BN}
+  */
   getChannelExpirationBlock(currentBlock){
     if(this.closedBlock){
       return this.closedBlock.add(SETTLE_TIMEOUT);
@@ -74,6 +112,7 @@ class Channel{
     }
   }
 
+  /** @property {string} - return the current channel state */
   get state(){
     if(this.settledBlock){
       return CHANNEL_STATE_SETTLED;
@@ -90,11 +129,16 @@ class Channel{
     }
   }
 
+  /** @returns {bool} returns true iff the channel is open*/
   isOpen(){
     return this.state === CHANNEL_STATE_OPEN;
   }
 
-
+  /** @param {message.RevealSecret} revealSecret 
+  * @returns {bool} - true if applied
+  * @throws "Invalid Message: Expected RevealSecret"
+  * @throws "Invalid Secret: Unknown secret revealed"
+  */
   handleRevealSecret(revealSecret){
     if(!revealSecret instanceof message.RevealSecret){
       throw new Error("Invalid Message: Expected RevealSecret");
@@ -124,6 +168,11 @@ class Channel{
 
   }
 
+  /** @param {(message.DirectTransfer|message.LockedTransfer)} transfer 
+  * @param {BN} currentBlock 
+  * @throws "Invalid transfer: cannot update a closing channel"
+  * @throws "Invalid Transfer: unknown from"
+  */
   handleTransfer(transfer,currentBlock){
     //check the direction of data flow
     if(!this.isOpen()){
@@ -139,6 +188,24 @@ class Channel{
 
   }
 
+  /** process a transfer in the direction of from > to channelState
+  * @param {ChannelState} from - transfer originator 
+  * @param {ChannelState} to - transfer recipient
+  * @param {(message.DirectTransfer|message.LockedTransfer)} transfer 
+  * @param {BN} currentBlock 
+  * @throws "Invalid Transfer Type"
+  * @throws "Invalid Channel Address: channel address mismatch"
+  * @throws "Invalid nonce: Nonce must be incremented by 1"
+  * @throws "Invalid Lock: Lock registered previously"
+  * @throws "Invalid LocksRoot for LockedTransfer"
+  * @throws "Invalid Lock: Lock amount must be greater than 0"
+  * @throws "Invalid SecretToProof: unknown secret"
+  * @throws "Invalid LocksRoot for SecretToProof:..."
+  * @throws "Invalid transferredAmount: must be monotonically increasing value"
+  * @throws "Invalid transferredAmount: SecretToProof does not provide expected lock amount"
+  * @throws "Invalid transferredAmount: Insufficient Balance:..."
+  * @returns {bool} - true if transfer applied to channelState
+  */
   handleTransferFromTo(from,to,transfer,currentBlock){
     if(!transfer instanceof message.ProofMessage){
       throw new Error("Invalid Transfer Type");
@@ -237,11 +304,20 @@ class Channel{
     return true;
   }
 
+  /** @returns {BN} incremented nonce */
   incrementedNonce(){
     return this.myState.nonce.add(new util.BN(1));
   }
 
-  //expirationBlock is the absolute blockNumber when the lock expires
+  /** create a locked transfer from myState for peerState
+  * @param {BN} msgID
+  * @param {Buffer} hashLock - the keccak256 hash of the secret
+  * @param {BN} amount 
+  * @param {BN} expirationBlock
+  * @param {BN} currentBlock
+  * @returns message.LockedTransfer
+  * @throws "Insufficient funds: lock amount must be less than or equal to transferrable amount"
+  */
   createLockedTransfer(msgID,hashLock,amount,expirationBlock,currentBlock){
     var transferrable = this.transferrableFromTo(this.myState,this.peerState,currentBlock);
     if(amount.lte(new util.BN(0)) || transferrable.lt(amount)){
@@ -264,6 +340,12 @@ class Channel{
     return lockedTransfer;
   }
 
+  /** create a direct transfer from myState to peerState
+  * @param {BN} msgID
+  * @param {BN} amount 
+  * @returns message.DirectTransfer
+  * @throws "Insufficient funds: direct transfer cannot be completed:..."
+  */
   createDirectTransfer(msgID,transferredAmount){
     var transferrable = this.transferrableFromTo(this.myState, this.peerState);
 
@@ -288,7 +370,20 @@ class Channel{
     return directTransfer;
 
   }
-
+  /** create a mediated transfer from myState to target using the peerState as a mediator and is set as the to address.
+  * This holds if there exists a route in the 
+  * state channel network between myState and target through the peer 
+  * @param {BN} msgID
+  * @param {Buffer} hashLock - the keccak256 hash of the secret
+  * @param {BN} amount 
+  * @param {BN} expirationBlock
+  * @param {BN} expirationBlock
+  * @param {Buffer} target - the intended recipient of the locked transfer.  This target node will make the RevealSecret request
+  * direction to the initiator
+  * @param {Buffer} initiator - myState ethereum address
+  * @param {BN} currentBlock
+  * @returns message.MediatedTransfer
+  */
   createMediatedTransfer(msgID,hashLock,amount,expiration,target,initiator,currentBlock){
     var lockedTransfer = this.createLockedTransfer(msgID,hashLock,amount,expiration,currentBlock);
     var mediatedTransfer = new message.MediatedTransfer(
@@ -300,6 +395,12 @@ class Channel{
     return mediatedTransfer;
   }
 
+  /** Move an openLocks amount to the transferredAmount and remove from merkletree, this can increase channel longevity
+  * as openLocks will require on-chain withdrawals without this mechanism.
+  *@param {BN} msgID
+  *@param {Buffer} secret 
+  *@returns {message.SecretToProof}
+  */ 
   createSecretToProof(msgID,secret){
     var lock = this.myState.getLockFromSecret(secret);
     if(!lock){
@@ -322,9 +423,11 @@ class Channel{
     return secretToProof;
   }
 
-  //this function is only used for handling SETTLE
-  //timeouts for locked transfers are handled by the statemachine atm
-  //this will be refactored to make sure code locality
+  /** handle a block update 
+  * @param {BN} currentBlock
+  * @returns {string[]} - GOT.* events to be processed
+  * @see Engine.handleEvent
+  */
   onBlock(currentBlock){
     //we use to auto issue settle but now we leave it to the user.
     var events =[]
@@ -340,10 +443,14 @@ class Channel{
 
   }  
   
+  /** @param {BN} currentBlock
+  @returns {bool}
+  */
   canIssueSettle(currentBlock){
     return (this.closedBlock &&
       currentBlock.gt(this.closedBlock.add(SETTLE_TIMEOUT)));
   }
+
 
   issueSettle(currentBlock){
    if(this.canIssueSettle(currentBlock)){
@@ -384,7 +491,9 @@ class Channel{
     return openLockProofs;
   }
 
-  //withdraw all peerstate locks
+  /** Internal  
+  @returns {channel.OpenLock}
+  */
   _withdrawPeerOpenLocks(){
     //withdraw all open locks
     var self = this;
@@ -478,6 +587,11 @@ class Channel{
 
 }
 
+/** @class encapsulate open lock proof for submission to blockchain 
+* @memberof channel
+* @property {message.OpenLock} openLock
+* @property {Buffer[]} merkleProof
+*/
 class OpenLockProof{
   constructor(options){
     this.openLock = options.openLock;
