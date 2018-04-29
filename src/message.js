@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 03:38:26
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-28 18:13:08
+* @Last Modified time: 2018-04-28 19:05:49
 */
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl');
@@ -18,7 +18,7 @@ EMPTY_32BYTE_BUFFER= Buffer.alloc(32);
 */
 EMPTY_20BYTE_BUFFER = Buffer.alloc(20);
 
-/** @class Hashable - a hashable interface class*/
+/** @class A hashable interface class*/
 class Hashable{
   /** getMessageHash - must implement */
   getMessageHash(){
@@ -26,7 +26,7 @@ class Hashable{
   }
 }
 
-/** TO_BN - convert a base 16 int to a BN 
+/** Convert a base 16 int to a BN 
 * @param {int} value - convert base 16 value to bn
 * @returns {BN}
 */
@@ -38,7 +38,7 @@ function TO_BN(value){
   }
 }
 
-/** JSON_REVIVER_FUNC - A reviver function to be sent to JSON.parse to handle buffer serialization and deserialization
+/** A reviver function to be sent to JSON.parse to handle buffer serialization and deserialization
 * @param {} k 
 * @param {} v
 * @returns {} - deserialized value 
@@ -56,7 +56,7 @@ function JSON_REVIVER_FUNC(k,v) {
       return v;
 }
 
-/** SERIALIZE - serialize message object
+/** Serialize message object
 * @param {SignedMessage} msg - message.SignedMessage base class type  
 * @returns {string} - serialized value 
 */
@@ -64,7 +64,7 @@ function SERIALIZE(msg){
   return JSON.stringify(msg);
 }
 
-/** DESERIALIZE - serialize message object
+/** Deserialize message object
 * @param {string} data - serialized value 
 * @return{SignedMessage} - message type
 */
@@ -72,7 +72,7 @@ function DESERIALIZE(data){
   return JSON.parse(data, JSON_REVIVER_FUNC);
 }
 
-/** DESERIALIZE_AND_DECODE_MESSAGE - deserialize a received message and create the appropriate object type based on classType property
+/** Deserialize a received message and create the appropriate object type based on classType property
 * @param {string} data - serialized value 
 * @returns {SignedMessage} - message type
 */
@@ -119,7 +119,7 @@ function DESERIALIZE_AND_DECODE_MESSAGE(data){
  * @property {int} v
  */
 
-/** @class SignedMessage - signed messag ebase class that generates a keccak256 hash and signs using ECDSA
+/** @class Signed message base class that generates a keccak256 hash and signs using ECDSA
 * @property {string} classType - base class type used for reflection 
 * @property {Signature} signature - the signature for this message
 */
@@ -181,8 +181,15 @@ class SignedMessage{
 
 }
 
-//Messages that encapsulate an on chain proof extend ProofMessage base class
-//A proof message maybe submitted onchain during settlement to allocate your funds
+/** @class Encapsulates a snapshot instance of a message and represents a proof that can be submitted to the blockchain during settlement
+* @extends SignedMessage
+* @property {BN} nonce 
+* @property {BN} transferredAmount 
+* @property {Buffer} locksRoot 
+* @property {Buffer} channelAddress 
+* @property {Buffer} messageHash
+* @property {Signature} signature 
+*/
 class Proof extends SignedMessage{
 
   constructor(options){
@@ -209,6 +216,16 @@ class Proof extends SignedMessage{
 
 
 }
+
+/** @class 
+* @extends SignedMessage
+* @property {BN} nonce 
+* @property {BN} transferredAmount 
+* @property {Buffer} locksRoot 
+* @property {Buffer} channelAddress 
+* @property {Buffer} messageHash
+* @property {Signature} signature 
+*/
 class ProofMessage extends SignedMessage{
 
   constructor(options){
@@ -252,9 +269,20 @@ class ProofMessage extends SignedMessage{
 
 }
 
-//A lock is included as part of a LockedTransfer message
+/** @class A hashed lock that prevents transfers from being completed until secret is provided
+* @extends Hashable
+* @property {BN} amount - the amount of money that will be transferred if the secret is revealed
+* @property {BN} expiration - the absolute blockNumber where this lock is no longer valid and cannot be redeemed 
+* @property {Buffer} hashLock - the keccak256 32 byte hash of the secret 
+*/
 class Lock extends Hashable{
 
+  /** @constructor
+  * @param {object} options
+  * @param {(int|BN)} options.amount=0 
+  * @param {(int|BN)} options.expiration=0 
+  * @param {Buffer} options.hashLock=EMPTY_32BYTE_BUFFER  
+  */
   constructor(options){
     super(options);
 
@@ -268,7 +296,9 @@ class Lock extends Hashable{
       this.amount, this.expiration, this.hashLock]);
     return hash;
   }
-
+  /** encode - solidity pack the properties into a serilazed lock object that can be unpacked or hashed by EVM
+  * @returns {Buffer} - 96 Byte Buffer encoding amount,expiration,hashLock
+  */
   encode(){
     var value = abi.solidityPack(['uint256','uint256','bytes32'],[
       this.amount, this.expiration, this.hashLock]);
@@ -277,6 +307,10 @@ class Lock extends Hashable{
 
 }
 
+/** @class A hashed lock that prevents transfers from being completed until secret is provided
+* @extends Lock
+* @property {Buffer} secret - the 32 byte secret 
+*/
 class OpenLock extends Lock{
 
   constructor(lock,secret){
@@ -291,7 +325,12 @@ class OpenLock extends Lock{
   }
 }
 
-
+/** @class A direct transfer that can be sent to an engine instance to immediately complete a transfer of funds.
+* Once a direct transfer is sent, the actor sending the message can consider the funds transferred (Given a reliable transport)
+* @extends ProofMessage
+* @property {BN} msgID - incrementing msgID for transport management
+* @property {Buffer} to - Ethereum Address of intended recipient  
+*/
 class DirectTransfer extends ProofMessage{
 
   constructor(options){
@@ -315,6 +354,11 @@ class DirectTransfer extends ProofMessage{
   }
 }
 
+/** @class A locked transfer that can be sent to an engine instance to begin lock process transfer.
+* Locked transfers complete asynchronously, as such, there maybe many in-flight and outstanding lock messages.
+* @extends DirectTransfer
+* @property {Lock} lock
+*/
 class LockedTransfer extends DirectTransfer{
 
   constructor(options){
@@ -343,6 +387,11 @@ class LockedTransfer extends DirectTransfer{
 
 }
 
+/** @class similar to a locked transfer however, this message has a target and to field.
+* This message type is the foundation for mediated transfers.
+* @extends LockedTransfer
+* @property {Buffer} target - Ethereum address of mediating target
+*/
 class MediatedTransfer extends LockedTransfer{
 
   constructor(options){
@@ -367,6 +416,13 @@ class MediatedTransfer extends LockedTransfer{
   }
 }
 
+/** @class used during the lifecyle of unlocking a locked message
+* @extends SignedMessage
+* @property {BN} msgID
+* @property {Buffer} to - Ethereum Address
+* @property {Buffer} hashLock - the hash to which you are requesting the secret
+* @property {BN} amount - the amount the secret unlocks
+*/
 class RequestSecret extends SignedMessage{
 
   constructor(options){
@@ -386,6 +442,11 @@ class RequestSecret extends SignedMessage{
   }
 }
 
+/** @class RevealSecret - in response to a RequestSecret
+* @extends SignedMessage
+* @property {Buffer} to - Ethereum Address
+* @property {Buffer} secret - the hash secret 
+*/
 class RevealSecret extends SignedMessage{
 
   constructor(options){
@@ -407,9 +468,15 @@ class RevealSecret extends SignedMessage{
   }
 }
 
-//Once a secret is known, if we want to keep the payment channel alive longer
-//then the min(openLocks.expired) block, then convert the lock into a balance proof
-//using this message.  Without it, we will have to close channel and withdraw on chain
+/** @class Once a secret is known, if we want to keep the payment channel alive longer
+* convert any openLocks into transferredAmounts. This message facilitates that and allows state channels to 
+* have indefinite lifetime.  Without this message type, channels would require on-chain withdrawal at the min(openLock.expiration) time.
+* This message effectively sets proof.transferredAmount += lock.amount and removes the lock from the merkle tree so it cannot be double spent
+* @extends ProofMessage
+* @property {BN} msgID
+* @property {Buffer} to - Ethereum Address
+* @property {Buffer} secret - the lock secret whos amount will be added to the transferredAmount of this messages proof
+*/
 class SecretToProof extends ProofMessage{
 
   constructor(options){
@@ -438,8 +505,11 @@ class SecretToProof extends ProofMessage{
 
 }
 
-//Note: We initially avoid signing acks because it basically
-//gives an attacker a valid message signature by the signer (which is not intended)
+/** @class An Ack message that identifies a particular msgID has been delivered. 
+* @property {BN} msgID
+* @property {Buffer} to - Ethereum Address
+* @property {Buffer} messageHash - the messageHash of the acked message 
+*/
 class Ack{
 
   constructor(options){
@@ -449,11 +519,23 @@ class Ack{
   }
 }
 
-//entropy collector
+/** Entropy collector for SJCL when generating random secrets.  Currently, this is broken on mobile platforms and seeding should be done manually.
+* Refer to: https://github.com/bitwiseshiftleft/sjcl/wiki/Symmetric-Crypto#seeding-the-generator
+*/
 function StartEntropyCollector(){
   sjcl.random.startCollectors();
 }
-//GLOBAL functions
+
+/**
+ * Secret Hash Pair 
+ * @typedef {Object} SecretHashPair
+ * @property {Buffer} secret - a cryptographically secure 32 Byte hash if the entropy of sjcl.random is completed appropriately
+ * @property {Buffer} hash - keccak256 hash of secret
+ */
+
+/** Generate random secret and corresponding keccak256 hash
+@returns {SecretHashPair}
+*/
 function GenerateRandomSecretHashPair(){
   var randomBuffer = sjcl.random.randomWords(256/(4*8));
   var secret = util.addHexPrefix(sjcl.codec.hex.fromBits(randomBuffer));
