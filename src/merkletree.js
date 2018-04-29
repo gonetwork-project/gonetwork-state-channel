@@ -2,10 +2,14 @@
 * @Author: amitshah
 * @Date:   2018-04-13 15:17:02
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-28 17:10:43
+* @Last Modified time: 2018-04-28 19:39:07
 */
 const util = require('ethereumjs-util');
 util.Buffer = require('buffer').Buffer;
+
+/**
+ * @namespace merkletree
+ */
 
 /**@class MerkleTree 
 * A special thanks to blog posts by ameensol and raiden-network team and their work on merkle proofs 
@@ -16,6 +20,7 @@ util.Buffer = require('buffer').Buffer;
 * @constructor
 * @param {Buffer[]} elements - an array of 32 Byte hashed Buffer elements that will make up the tree
 * @param {bool} ordered - determines if the elements preserve ordering as we walk up the tree to generate proofs
+* @memberof merkletree
 */
 function MerkleTree(elements,ordered) {
   this.ordered = ordered;
@@ -103,6 +108,7 @@ MerkleTree.prototype.sumLevel = function(elements){
 * @param {Buffer} b  
 * @param {bool} ordered - if true, concats a+b, if false then Buffer.compare sort a and b and then concat
 * @returns (Buffer)
+* @memberof merkletree
 */
 function concatBuffer(a,b,ordered){
   //TODO: IS this portable??
@@ -209,7 +215,9 @@ MerkleTree.prototype.verify = function(proof,hashedElement){
   return checkMerkleProof(proof,this.getRoot(), hashedElement, this.ordered);
 }
 
-/** Deprectated */
+/** Deprectated 
+* @memberof message
+*/
 function checkMerkleProofOrdered(proof, root, element, index) {
   // use the index to determine the node ordering
   // index ranges 1 to n
@@ -241,7 +249,9 @@ function checkMerkleProofOrdered(proof, root, element, index) {
 * @param {Buffer[]} proof - an array of bytes32 elements that represent the merkle proof 
 * @param {Buffer} root -bytes32 of the root of the merkleTree
 * @param {Buffer} element - hashed bytes32 leaf element to prove exists in the tree  
-* @returns {bool} */
+* @returns {bool} 
+* @memberof merkletree
+*/
 function checkMerkleProof(proof,root,element){
  var buffer = proof.reduce(function(acc, currentValue){
     return util.sha3(concatBuffer(acc,currentValue));
@@ -250,6 +260,7 @@ function checkMerkleProof(proof,root,element){
 }
 /** Internal printTree - function to pretty print each of the log(n) levels that make up the merkle tree 
 * @param {MerkleTree} merkletree
+* @memberof merkletree
 */
 function printTree(merkletree)
 {

@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 03:38:26
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-28 19:05:49
+* @Last Modified time: 2018-04-28 19:38:44
 */
 const util = require('ethereumjs-util')
 const sjcl = require('sjcl');
@@ -10,15 +10,23 @@ const rlp = require('rlp');
 const abi = require("ethereumjs-abi");
 
 /**
+ * @namespace message
+ */
+
+/**
  * @const {Buffer} EMPTY_32BYTE_BUFFER
+ * @memberof message
  */
 EMPTY_32BYTE_BUFFER= Buffer.alloc(32);
 /**
 * @const {Buffer} EMPTY_20BYTE_BUFFER
+* @memberof message
 */
 EMPTY_20BYTE_BUFFER = Buffer.alloc(20);
 
-/** @class A hashable interface class*/
+/** @class A hashable interface class
+* @memberof message
+*/
 class Hashable{
   /** getMessageHash - must implement */
   getMessageHash(){
@@ -29,6 +37,7 @@ class Hashable{
 /** Convert a base 16 int to a BN 
 * @param {int} value - convert base 16 value to bn
 * @returns {BN}
+* @memberof message
 */
 function TO_BN(value){
   if(util.BN.isBN(value)){
@@ -42,6 +51,7 @@ function TO_BN(value){
 * @param {} k 
 * @param {} v
 * @returns {} - deserialized value 
+* @memberof message
 */
 function JSON_REVIVER_FUNC(k,v) {
       if (
@@ -59,6 +69,7 @@ function JSON_REVIVER_FUNC(k,v) {
 /** Serialize message object
 * @param {SignedMessage} msg - message.SignedMessage base class type  
 * @returns {string} - serialized value 
+* @memberof message
 */
 function SERIALIZE(msg){
   return JSON.stringify(msg);
@@ -67,6 +78,7 @@ function SERIALIZE(msg){
 /** Deserialize message object
 * @param {string} data - serialized value 
 * @return{SignedMessage} - message type
+* @memberof message
 */
 function DESERIALIZE(data){
   return JSON.parse(data, JSON_REVIVER_FUNC);
@@ -75,6 +87,7 @@ function DESERIALIZE(data){
 /** Deserialize a received message and create the appropriate object type based on classType property
 * @param {string} data - serialized value 
 * @returns {SignedMessage} - message type
+* @memberof message
 */
 function DESERIALIZE_AND_DECODE_MESSAGE(data){
   var jsonObj = DESERIALIZE(data);
@@ -122,6 +135,7 @@ function DESERIALIZE_AND_DECODE_MESSAGE(data){
 /** @class Signed message base class that generates a keccak256 hash and signs using ECDSA
 * @property {string} classType - base class type used for reflection 
 * @property {Signature} signature - the signature for this message
+* @memberof message
 */
 class SignedMessage{
 
@@ -189,6 +203,7 @@ class SignedMessage{
 * @property {Buffer} channelAddress 
 * @property {Buffer} messageHash
 * @property {Signature} signature 
+* @memberof message
 */
 class Proof extends SignedMessage{
 
@@ -225,6 +240,7 @@ class Proof extends SignedMessage{
 * @property {Buffer} channelAddress 
 * @property {Buffer} messageHash
 * @property {Signature} signature 
+* @memberof message
 */
 class ProofMessage extends SignedMessage{
 
@@ -274,6 +290,7 @@ class ProofMessage extends SignedMessage{
 * @property {BN} amount - the amount of money that will be transferred if the secret is revealed
 * @property {BN} expiration - the absolute blockNumber where this lock is no longer valid and cannot be redeemed 
 * @property {Buffer} hashLock - the keccak256 32 byte hash of the secret 
+* @memberof message
 */
 class Lock extends Hashable{
 
@@ -310,6 +327,7 @@ class Lock extends Hashable{
 /** @class A hashed lock that prevents transfers from being completed until secret is provided
 * @extends Lock
 * @property {Buffer} secret - the 32 byte secret 
+* @memberof message
 */
 class OpenLock extends Lock{
 
@@ -330,6 +348,7 @@ class OpenLock extends Lock{
 * @extends ProofMessage
 * @property {BN} msgID - incrementing msgID for transport management
 * @property {Buffer} to - Ethereum Address of intended recipient  
+* @memberof message
 */
 class DirectTransfer extends ProofMessage{
 
@@ -358,6 +377,7 @@ class DirectTransfer extends ProofMessage{
 * Locked transfers complete asynchronously, as such, there maybe many in-flight and outstanding lock messages.
 * @extends DirectTransfer
 * @property {Lock} lock
+* @memberof message
 */
 class LockedTransfer extends DirectTransfer{
 
@@ -391,6 +411,7 @@ class LockedTransfer extends DirectTransfer{
 * This message type is the foundation for mediated transfers.
 * @extends LockedTransfer
 * @property {Buffer} target - Ethereum address of mediating target
+* @memberof message
 */
 class MediatedTransfer extends LockedTransfer{
 
@@ -422,6 +443,7 @@ class MediatedTransfer extends LockedTransfer{
 * @property {Buffer} to - Ethereum Address
 * @property {Buffer} hashLock - the hash to which you are requesting the secret
 * @property {BN} amount - the amount the secret unlocks
+* @memberof message
 */
 class RequestSecret extends SignedMessage{
 
@@ -446,6 +468,7 @@ class RequestSecret extends SignedMessage{
 * @extends SignedMessage
 * @property {Buffer} to - Ethereum Address
 * @property {Buffer} secret - the hash secret 
+* @memberof message
 */
 class RevealSecret extends SignedMessage{
 
@@ -476,6 +499,7 @@ class RevealSecret extends SignedMessage{
 * @property {BN} msgID
 * @property {Buffer} to - Ethereum Address
 * @property {Buffer} secret - the lock secret whos amount will be added to the transferredAmount of this messages proof
+* @memberof message
 */
 class SecretToProof extends ProofMessage{
 
@@ -509,6 +533,7 @@ class SecretToProof extends ProofMessage{
 * @property {BN} msgID
 * @property {Buffer} to - Ethereum Address
 * @property {Buffer} messageHash - the messageHash of the acked message 
+* @memberof message
 */
 class Ack{
 
@@ -521,6 +546,7 @@ class Ack{
 
 /** Entropy collector for SJCL when generating random secrets.  Currently, this is broken on mobile platforms and seeding should be done manually.
 * Refer to: https://github.com/bitwiseshiftleft/sjcl/wiki/Symmetric-Crypto#seeding-the-generator
+* @memberof message
 */
 function StartEntropyCollector(){
   sjcl.random.startCollectors();
@@ -535,6 +561,7 @@ function StartEntropyCollector(){
 
 /** Generate random secret and corresponding keccak256 hash
 @returns {SecretHashPair}
+* @memberof message
 */
 function GenerateRandomSecretHashPair(){
   var randomBuffer = sjcl.random.randomWords(256/(4*8));
