@@ -1,4 +1,32 @@
-/*
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: merkletree.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: merkletree.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/*
 * @Author: amitshah
 * @Date:   2018-04-13 15:17:02
 * @Last Modified by:   amitshah
@@ -28,7 +56,7 @@ function MerkleTree(elements,ordered) {
   this.elements = elements.filter(function(n){ return n != undefined });
 
   // check only buffers have been submitted
-  for(var i=0; i< this.elements.length; i++){
+  for(var i=0; i&lt; this.elements.length; i++){
     //if the element was a buffer, it was left untouched, if it was hex or string, converted
     var buffer = util.toBuffer(this.elements[i]);
     if(!(buffer.length ==32)){
@@ -81,13 +109,13 @@ MerkleTree.prototype.sumLevel = function(elements){
 //        [temp addObject:[NSValue valueWithPointer:hash]];
 //    }
 
-    while(k < elements.length){
+    while(k &lt; elements.length){
 
         var a = elements[k++];
         var b = null;
         var hash = null;
         var buffer = null;
-        if(k < elements.length){
+        if(k &lt; elements.length){
             //concat buffers
             buffer =concatBuffer(a,elements[k++],this.ordered);
            //we re-use and blowup the hash value stored
@@ -129,11 +157,11 @@ MerkleTree.prototype.generateProof = function(hashedElement){
 
     var result = [];
     var k =0;
-    if(!(hashedElement.length ===32 && util.Buffer.isBuffer(hashedElement))){
+    if(!(hashedElement.length ===32 &amp;&amp; util.Buffer.isBuffer(hashedElement))){
       throw new Error("a proof can only be generated for a hashed element, please try hashing your element before sending");
     }
     //Get the index of the element first
-    for(var i = 0; i < this.levels[0].length; i++){
+    for(var i = 0; i &lt; this.levels[0].length; i++){
         var v = this.levels[0][i];
 
         if(hashedElement.compare(v)===0){
@@ -143,7 +171,7 @@ MerkleTree.prototype.generateProof = function(hashedElement){
     }
 
     //now go through the layers to make the proof
-    for(var i=0; i < this.levels.length;i++){
+    for(var i=0; i &lt; this.levels.length;i++){
         var level = this.levels[i];
         var v = this._getProofPair(k,level);
         if(v){
@@ -163,7 +191,7 @@ MerkleTree.prototype.generateProof = function(hashedElement){
 */
 MerkleTree.prototype._getProofPair = function(index,level){
     var pairIndex = (index+1) %2 ==0 ? index -1 : index +1;
-    if(pairIndex < level.length){
+    if(pairIndex &lt; level.length){
         return level[pairIndex];
     }
     return null;
@@ -171,7 +199,7 @@ MerkleTree.prototype._getProofPair = function(index,level){
 
 
 MerkleTree.prototype.push = function(hashedElement){
-  if(!(hashedElement.length ===32 && util.Buffer.isBuffer(hashedElement))){
+  if(!(hashedElement.length ===32 &amp;&amp; util.Buffer.isBuffer(hashedElement))){
       throw new Error("a proof can only be generated for a hashed element, please try hashing your element before sending");
     }
   this.elements.push(hashedElement);
@@ -203,7 +231,7 @@ MerkleTree.prototype.findElement = function(hashedElement){
       return k;
     }
     k++;
-  }while(k< this.elements.length);
+  }while(k&lt; this.elements.length);
 }
 
 /** Internal verify - returns true or false if the proof and hashedElement equate to the current merkleTree's root 
@@ -224,13 +252,13 @@ function checkMerkleProofOrdered(proof, root, element, index) {
 
   var tempHash = element;
 
-  for (var i = 0; i < proof.length; i++) {
+  for (var i = 0; i &lt; proof.length; i++) {
     var remaining = proof.length - i;
 
     // we don't assume that the tree is padded to a power of 2
     // if the index is odd then the proof will start with a hash at a higher
     // layer, so we have to adjust the index to be the index at that layer
-    while (remaining && index % 2 === 1 && index > Math.pow(2, remaining)) {
+    while (remaining &amp;&amp; index % 2 === 1 &amp;&amp; index > Math.pow(2, remaining)) {
       index = Math.round(index / 2)
     }
 
@@ -265,10 +293,10 @@ function checkMerkleProof(proof,root,element){
 function printTree(merkletree)
 {
 
-    for(var i =0; i < merkletree.levels.length;i++){
+    for(var i =0; i &lt; merkletree.levels.length;i++){
         var level = merkletree.levels[i];
         console.log("----------------LEVEL"+i+"--------- \r\n \r\n");
-        for(var j =0; j < level.length ; j++){
+        for(var j =0; j &lt; level.length ; j++){
             console.log(util.bufferToHex(level[j]));
         }
   }
@@ -282,3 +310,26 @@ module.exports = {
   checkMerkleProofOrdered,
   printTree
 }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Channel_.html">Channel</a></li><li><a href="channel.OpenLockProof.html">OpenLockProof</a></li><li><a href="ChannelState.html">ChannelState</a></li><li><a href="Engine.html">Engine</a></li><li><a href="MediatedTransferState.html">MediatedTransferState</a></li><li><a href="merkletree.MerkleTree.html">MerkleTree</a></li><li><a href="message.Ack.html">Ack</a></li><li><a href="message.DirectTransfer.html">DirectTransfer</a></li><li><a href="message.Hashable.html">Hashable</a></li><li><a href="message.Lock.html">Lock</a></li><li><a href="message.LockedTransfer.html">LockedTransfer</a></li><li><a href="message.MediatedTransfer.html">MediatedTransfer</a></li><li><a href="message.OpenLock.html">OpenLock</a></li><li><a href="message.Proof.html">Proof</a></li><li><a href="message.ProofMessage.html">ProofMessage</a></li><li><a href="message.RequestSecret.html">RequestSecret</a></li><li><a href="message.RevealSecret.html">RevealSecret</a></li><li><a href="message.SecretToProof.html">SecretToProof</a></li><li><a href="message.SignedMessage.html">SignedMessage</a></li><li><a href="MessageState.html">MessageState</a></li><li><a href="stateMachine.InitiatorFactory.html">InitiatorFactory</a></li><li><a href="stateMachine.TargetFactory.html">TargetFactory</a></li></ul><h3>Namespaces</h3><ul><li><a href="channel.html">channel</a></li><li><a href="merkletree.html">merkletree</a></li><li><a href="message.html">message</a></li><li><a href="stateMachine.html">stateMachine</a></li></ul><h3><a href="global.html">Global</a></h3>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Sun Apr 29 2018 00:24:37 GMT-0500 (EST)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,4 +1,32 @@
-/*
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: channel.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: channel.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/*
 * @Author: amitshah
 * @Date:   2018-04-17 01:15:31
 * @Last Modified by:   amitshah
@@ -57,7 +85,7 @@ REVEAL_TIMEOUT = new util.BN(15);
 * @property {BN} issuedTransferUpdateBlock=null 
 * @property {BN} issuedSettleBlock=null 
 * @property {BN} updatedProofBlock=null - the block you sent your proof message to the on-chain netting channel, null if your partner never send you value transfers
-* @property {Object.<string,int>} withdrawnLocks - the state of the on-chain withdraw proof  */
+* @property {Object.&lt;string,int>} withdrawnLocks - the state of the on-chain withdraw proof  */
 class Channel{
 
   /**
@@ -154,7 +182,7 @@ class Channel{
     // if(!from){throw new Error("Invalid RevealSecret: Unknown secret sent")};
     var myLock = this.myState.getLockFromSecret(revealSecret.secret);
     var peerLock = this.peerState.getLockFromSecret(revealSecret.secret);
-    if(!myLock && !peerLock){
+    if(!myLock &amp;&amp; !peerLock){
       throw new Error("Invalid Secret: Unknown secret revealed");
     }
     if(myLock){
@@ -246,9 +274,9 @@ class Channel{
       //dont forward message, but alteast the locksRoots are synced
 
       // var expirationBlock = this.getChannelExpirationBlock(currentBlock);
-      // //=  currentBlock.add(revealTimeout)<= expirationBlock <= currentBlock.add(SETTLE_TIMEOUT)
+      // //=  currentBlock.add(revealTimeout)&lt;= expirationBlock &lt;= currentBlock.add(SETTLE_TIMEOUT)
       // if(lock.expiration.lt(currentBlock.add(REVEAL_TIMEOUT)) || lock.expiration.gt(expirationBlock)){
-      //   throw new Error("Invalid Lock Expiration: currentBlock+ this.REVEAL_TIMEOUT < Lock expiration < this.SETTLE_TIMEOUT ");
+      //   throw new Error("Invalid Lock Expiration: currentBlock+ this.REVEAL_TIMEOUT &lt; Lock expiration &lt; this.SETTLE_TIMEOUT ");
       // }
 
     }else if(transfer instanceof message.SecretToProof){
@@ -447,7 +475,7 @@ class Channel{
   @returns {bool}
   */
   canIssueSettle(currentBlock){
-    return (this.closedBlock &&
+    return (this.closedBlock &amp;&amp;
       currentBlock.gt(this.closedBlock.add(SETTLE_TIMEOUT)));
   }
 
@@ -460,7 +488,7 @@ class Channel{
   }
 
   issueClose(currentBlock){
-    if(!this.issuedCloseBlock && !this.closedBlock){
+    if(!this.issuedCloseBlock &amp;&amp; !this.closedBlock){
 
       this.issuedCloseBlock = currentBlock;
       
@@ -482,7 +510,7 @@ class Channel{
     //   throw new Error("Channel Error: Cannot withdraw lock without updating proof to blockchain");
     // }
     var openLockProofs = this._withdrawPeerOpenLocks();
-    for(var i=0; i < openLockProofs.length; i++){
+    for(var i=0; i &lt; openLockProofs.length; i++){
         var openLock = openLockProofs[i].openLock;
         var hashKey = util.addHexPrefix(openLock.hashLock.toString('hex'));
         this.withdrawnLocks[hashKey] = currentBlock;
@@ -609,3 +637,26 @@ module.exports = {
   CHANNEL_STATE_OPEN, CHANNEL_STATE_CLOSED, CHANNEL_STATE_SETTLED,OpenLockProof
 }
 
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Channel_.html">Channel</a></li><li><a href="channel.OpenLockProof.html">OpenLockProof</a></li><li><a href="ChannelState.html">ChannelState</a></li><li><a href="Engine.html">Engine</a></li><li><a href="MediatedTransferState.html">MediatedTransferState</a></li><li><a href="merkletree.MerkleTree.html">MerkleTree</a></li><li><a href="message.Ack.html">Ack</a></li><li><a href="message.DirectTransfer.html">DirectTransfer</a></li><li><a href="message.Hashable.html">Hashable</a></li><li><a href="message.Lock.html">Lock</a></li><li><a href="message.LockedTransfer.html">LockedTransfer</a></li><li><a href="message.MediatedTransfer.html">MediatedTransfer</a></li><li><a href="message.OpenLock.html">OpenLock</a></li><li><a href="message.Proof.html">Proof</a></li><li><a href="message.ProofMessage.html">ProofMessage</a></li><li><a href="message.RequestSecret.html">RequestSecret</a></li><li><a href="message.RevealSecret.html">RevealSecret</a></li><li><a href="message.SecretToProof.html">SecretToProof</a></li><li><a href="message.SignedMessage.html">SignedMessage</a></li><li><a href="MessageState.html">MessageState</a></li><li><a href="stateMachine.InitiatorFactory.html">InitiatorFactory</a></li><li><a href="stateMachine.TargetFactory.html">TargetFactory</a></li></ul><h3>Namespaces</h3><ul><li><a href="channel.html">channel</a></li><li><a href="merkletree.html">merkletree</a></li><li><a href="message.html">message</a></li><li><a href="stateMachine.html">stateMachine</a></li></ul><h3><a href="global.html">Global</a></h3>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Sun Apr 29 2018 00:24:37 GMT-0500 (EST)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

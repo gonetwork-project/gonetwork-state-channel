@@ -2,7 +2,7 @@
 * @Author: amitshah
 * @Date:   2018-04-17 01:27:58
 * @Last Modified by:   amitshah
-* @Last Modified time: 2018-04-19 15:56:53
+* @Last Modified time: 2018-04-25 18:00:49
 */
 
 test = require('tape');
@@ -10,6 +10,7 @@ engineLib = require('../src/engine');
 channel = require('../src/channel');
 util = require('ethereumjs-util');
 message = require('../src/message');
+merkletree = require('../src/merkletree');
 
 var privateKey =  util.toBuffer('0xe331b6d69882b4cb4ea581d88e0b604039a3de5967688d3dcffdd2270c0fd109');
 var publicKey =util.privateToPublic(privateKey);
@@ -78,6 +79,67 @@ class TestEventBus extends events.EventEmitter{
 
 }
 
+class MockBlockchain{
+  constructor(blockchainQueue){
+    this.blockchainQueue = blockchainQueue;
+    this.cmdQueue =[];
+  }
+
+  handle(msg){
+    this.blockchainQueue.push(msg);
+  }
+
+  closeChannel(channelAddress,proof){
+    this.cmdQueue.push("closeChannel");
+    var self = this;
+    var args = arguments;
+    return new Promise(function(resolve,reject) {
+          self.blockchainQueue.push(args);          
+    });
+  }
+
+  updateTransfer(channelAddress, proof, success,error){
+    this.cmdQueue.push("updateTransfer");
+     var self = this;
+    var args = arguments;
+    return new Promise(function(resolve,reject){
+      self.blockchainQueue.push(args);
+      resolve(args);
+
+    });
+  }
+
+ 
+  withdrawLock(channelAddress, encodedLock, merkleProof,secret){
+
+    this.cmdQueue.push("withdrawPeerOpenLocks");
+    var self = this;
+    var args = arguments;
+    return new Promise(function(resolve,reject){
+      self.blockchainQueue.push(args);
+      resolve(1000);
+    });
+  }
+
+  newChannel(peerAddress,settleTimeout){
+    return new Promise(function(resolve,reject){
+          this.cmdQueue.push("newChannel");
+        //this.cmdQueue.push([peerAddress,settleTimeout]);
+        resolve(channelAddress);
+    })
+  }
+
+  settle(channelAddress){
+    this.cmdQueue.push("settle");
+    var self = this;
+    var args = arguments;
+    return new Promise(function (resolve,reject) {
+      resolve(args);
+    });
+  }
+
+}
+
 function assertChannelState(assert,
       engine,channelAddress,nonce,depositBalance,transferredAmount,lockedAmount,unlockedAmount,
       peerNonce,peerDepositBalance,peerTransferredAmount,peerLockedAmount,peerUnlockedAmount,currentBlock){
@@ -124,36 +186,33 @@ test('test engine', function(t){
   t.test("component test: create new channel with 0x"+pk_addr[1].address.toString("hex")+", depositBalance 501,327", function (assert) {
     var currentBlock = new util.BN(0);
     var engine = createEngine(0);
-    engine.blockchain = function (cmd) {
-
-        return true;
-    };
+    engine.blockchain = new MockBlockchain([]);
     //channelAddress,myDeposityBalance,peerAddress
     var depositBalance = new util.BN(501);
-    engine.createNewChannel(pk_addr[1].address,depositBalance);
+    engine.newChannel(pk_addr[1].address);
+    
     assert.equals(engine.pendingChannels.hasOwnProperty(pk_addr[1].address.toString('hex')),true);
 
     try{
-      engine.createNewChannel(pk_addr[1].address,depositBalance);
+      engine.newChannel(pk_addr[1].address,depositBalance);
     }catch(err){
       assert.equals(err.message, "Invalid Channel: cannot create new channel as channel already exists with peer","can handle multiple calls to create new channel");
     }
 
-    engine.onNewChannel(channelAddress,
+    engine.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0));
+      channel.SETTLE_TIMEOUT);
+      ;
 
     //handle multiple events coming back from blockchain
     try{
-      engine.onNewChannel(channelAddress,
+      engine.onChannelNew(channelAddress,
         pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
       new util.BN(0));
     }catch(err){
-      assert.equals(err.message, "Invalid Channel: cannot add new channel as it already exists", "can handle duplicate calls to onNewChannel");
+      assert.equals(err.message, "Invalid Channel: cannot add new channel as it already exists", "can handle duplicate calls to onChannelNew");
     }
 
     assert.equals(engine.pendingChannels.hasOwnProperty(pk_addr[1].address.toString('hex')),false);
@@ -161,14 +220,17 @@ test('test engine', function(t){
     assert.equals(engine.channels.hasOwnProperty(channelAddress.toString('hex')), true);
     assert.equals(engine.channelByPeer.hasOwnProperty(pk_addr[1].address.toString('hex')),true);
 
-    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+
+
     assertChannelState(assert,
       engine,channelAddress,new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),
       new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
 
     //try an out of order deposit
     try{
-      engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(320));
+      engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(320));
     }catch(err){
       assert.equals(err.message, "Invalid Deposit Amount: deposit must be monotonically increasing");
     }
@@ -178,6 +240,8 @@ test('test engine', function(t){
 
 
     assert.end();
+
+
   });
 
   t.test("component test: e2e engine direct transfer", function (assert) {
@@ -195,29 +259,25 @@ test('test engine', function(t){
     engine2.send = function  (msg) {
       sendQueue.push(message.SERIALIZE(msg));
     }
+    var mockBlockChain = new MockBlockchain(blockchainQueue);
+    engine.blockchain = mockBlockChain;
+    engine2.blockchain = mockBlockChain;
 
-    engine.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-    engine2.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-
-    engine.onNewChannel(channelAddress,
+    engine.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0));
-    engine2.onNewChannel(channelAddress,
+      channel.SETTLE_TIMEOUT);
+    engine2.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0))
+      channel.SETTLE_TIMEOUT)
 
 
-
-    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    
 
 
     assertChannelState(assert,
@@ -340,7 +400,7 @@ test('test engine', function(t){
     assert.end();
   })
 
-  t.test("component test: e2e engine mediated transfer", function (assert) {
+  t.test("component test: #1) e2e engine mediated transfer #2)engine 1 responds with transferUpdate when it receives a channelClose event as it did not issue close", function (assert) {
 
     var sendQueue = [];
     var blockchainQueue = [];
@@ -350,6 +410,7 @@ test('test engine', function(t){
     var engine = createEngine(0);
     var engine2 = createEngine(1);
 
+   
 
     //SETUP AND DEPOSIT FOR ENGINES
      engine.send = function  (msg) {
@@ -360,29 +421,25 @@ test('test engine', function(t){
       sendQueue.push(message.SERIALIZE(msg));
     }
 
-    engine.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-    engine2.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-
-    engine.onNewChannel(channelAddress,
+    var mockBlockChain = new MockBlockchain(blockchainQueue);
+    engine.blockchain = mockBlockChain;
+    engine2.blockchain = mockBlockChain;
+    
+    engine.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0));
-    engine2.onNewChannel(channelAddress,
+      channel.SETTLE_TIMEOUT);
+    engine2.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0))
+      channel.SETTLE_TIMEOUT)
 
 
-
-    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-
+    engine.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+   
 
     assertChannelState(assert,
       engine,channelAddress,
@@ -399,7 +456,7 @@ test('test engine', function(t){
 
     currentBlock = currentBlock.add(new util.BN(1));
 
-    //START  A DIRECT TRANSFER FROM ENGINE(0) to ENGINE(1)
+    //START  A MEDIATED TRANSFER FROM ENGINE(0) to ENGINE(1)
 
     assert.equals(sendQueue.length, 0, "send direct transfer");
 
@@ -460,6 +517,7 @@ test('test engine', function(t){
     console.log(engine.channels[channelAddress.toString('hex')].myState);
     console.log(engine2.channels[channelAddress.toString('hex')].peerState);
 
+    //TEST #1 states should be synced
      assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
@@ -476,7 +534,7 @@ test('test engine', function(t){
      engine2.onMessage(secretToProof);
 
 
-     //final states synchronized
+     
       assertChannelState(assert,
       engine,channelAddress,
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
@@ -487,35 +545,45 @@ test('test engine', function(t){
       new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
       new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
 
-    //engine 2 initiate close
+    //TEST #2 Engine 2 initiates close, Engine 1 responds to onChannelClose with updateTransfer request to blockchain
     assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
      assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
     engine2.closeChannel(channelAddress);
-    assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
-    assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
 
 
-    assert.equals(blockchainQueue.length, 2, "blockchain");
-    assert.equals(blockchainQueue[0][0],"CLOSE_CHANNEL");
-    assert.notEqual(blockchainQueue[0][1],null);
-    assert.equals(blockchainQueue[1][0],"WITHDRAW_LOCKS");
-    assert.equals(blockchainQueue[1][1].length,0);//no locks to unlock
-     //blockchain responds with close events
-    blockchainQueue = [];
-    currentBlock =currentBlock.add(new util.BN(1));
-    engine.onClosed(channelAddress,currentBlock);
-    assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_CLOSED);
-    assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
-
-    assert.equals(blockchainQueue.length, 2,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-    console.log(blockchainQueue);
-    assert.equals(blockchainQueue[0][1], null,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
-    assert.equals(blockchainQueue[1][1].length, 0,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
+      engine2.withdrawPeerOpenLocks(channelAddress);
+      assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
+      assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
 
 
+      assert.equals(blockchainQueue.length, 1, "blockchain, no open locks to call to blockchain");
+      assertProof(assert,blockchainQueue[0][1],2,channelAddress,50,message.EMPTY_32BYTE_BUFFER,engine.address);
+      assert.equals(mockBlockChain.cmdQueue.length,1);
+      assert.equals(mockBlockChain.cmdQueue[0],"closeChannel");
+      
+     
+      
+      currentBlock =currentBlock.add(new util.BN(1));    
+      
+      engine.onChannelClose(channelAddress,engine2.address,currentBlock)
+      .then(function(){
+        engine.withdrawPeerOpenLocks(channelAddress);
+        assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_CLOSED);
+        assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
+        assert.equals(blockchainQueue.length, 2,"engine(2) didnt send any transfers to engine(1) so no close proof needed by engine(1)");
+        assert.equals(mockBlockChain.cmdQueue.length,2);
+        assert.equals(mockBlockChain.cmdQueue[0],"closeChannel");
+        assert.equals(mockBlockChain.cmdQueue[1],"updateTransfer");
+      });
+
+      
+
+    
+    
 
     assert.end();
-  })
+  });
+
   function assertState(assert,state,expectedState){
      assert.equal(state.__machina__['mediated-transfer'].state, expectedState);
   }
@@ -527,29 +595,24 @@ test('test engine', function(t){
     var engine = createEngine(0);
     var engine2 = createEngine(1);
 
-    engine.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-    engine2.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-
-    engine.onNewChannel(channelAddress,
+    var mockBlockChain = new MockBlockchain(blockchainQueue);
+    engine.blockchain = mockBlockChain;
+    engine2.blockchain = mockBlockChain;
+    
+    engine.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0));
-    engine2.onNewChannel(channelAddress,
+      channel.SETTLE_TIMEOUT);
+    engine2.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0))
+      channel.SETTLE_TIMEOUT)
 
 
-
-    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-
+    engine.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
 
     assertChannelState(assert,
       engine,channelAddress,
@@ -645,30 +708,24 @@ t.test('multiple unopened locks expire on engine handleBlock',function (assert) 
 
     var engine = createEngine(0);
     var engine2 = createEngine(1);
-
-    engine.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-    engine2.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-
-    engine.onNewChannel(channelAddress,
+    var mockBlockChain = new MockBlockchain(blockchainQueue);
+    engine.blockchain = mockBlockChain;
+    engine2.blockchain = mockBlockChain;
+    
+    engine.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0));
-    engine2.onNewChannel(channelAddress,
+      channel.SETTLE_TIMEOUT);
+    engine2.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0))
+      channel.SETTLE_TIMEOUT)
 
 
-
-    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-
+    engine.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
 
     assertChannelState(assert,
       engine,channelAddress,
@@ -788,35 +845,28 @@ t.test('multiple unopened locks expire on engine handleBlock',function (assert) 
   });
 
  t.test('should emit GOT.closeChannel if a lock is open and the currentBlock <= lock.expiration + reveal_timeout',function (assert) {
-    var blockchainQueue = [];
-    var currentBlock = new util.BN(0);
-
+   var currentBlock = new util.BN(0);
+   var blockchainQueue = [];
     var engine = createEngine(0);
     var engine2 = createEngine(1);
-
-    engine.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-    engine2.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-
-    engine.onNewChannel(channelAddress,
+    var mockBlockChain = new MockBlockchain(blockchainQueue);
+    engine.blockchain = mockBlockChain;
+    engine2.blockchain = mockBlockChain;
+    
+    engine.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0));
-    engine2.onNewChannel(channelAddress,
+      channel.SETTLE_TIMEOUT);
+    engine2.onChannelNew(channelAddress,
       pk_addr[0].address,
-      new util.BN(501),
       pk_addr[1].address,
-      new util.BN(0))
+      channel.SETTLE_TIMEOUT)
 
 
-
-    engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-    engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-
+    engine.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
 
     assertChannelState(assert,
       engine,channelAddress,
@@ -892,22 +942,39 @@ t.test('multiple unopened locks expire on engine handleBlock',function (assert) 
 
         assert.equals(msg.from.compare(engine2.address),0);
         //==================================CORE OF THE TEST
-        //aftwer we apply the reveal secret, we are going to move currentBlock ahead and expire the transfer, this should not
+        //aftwer we apply the reveal secret, we are going to move currentBlock ahead and expire the transfer, this should
         //cause any blockchain events and further processing just moves one without failing
         //cause the lock to timeout
+
+        assert.equals(blockchainQueue.length, 0);
         assertState(assert,engine.messageState['1'].state,'awaitSecretToProof');
+        
         engine.onBlock(currentBlock.add(new util.BN(1)));
+        assert.equals(blockchainQueue.length, 1);
         assertState(assert,engine.messageState['1'].state,'completedTransfer');
 
-        assert.equals(blockchainQueue.length, 2);
-        assert.equals(blockchainQueue[0][0],"CLOSE_CHANNEL", "first command should be close channel");
+        assert.equals(mockBlockChain.cmdQueue[0],"closeChannel", "first command should be close channel");
         assertProof(assert,blockchainQueue[0][1],1,channelAddress,0,
           engine.channels[channelAddress.toString('hex')].peerState.proof.locksRoot,engine2.address);
 
-        assert.equals(blockchainQueue[1][0],"WITHDRAW_LOCKS", "next we withdraw open locks");
-        //TODO: you may want to test the locks proof is still good
-        assert.equals(blockchainQueue[1][1].length, 1, "only a single lock proof is needed");
+        //now we have to manually execute withdrawLocks onchain
+        engine.withdrawPeerOpenLocks(channelAddress,currentBlock);
+        assert.equals(mockBlockChain.cmdQueue[1],"withdrawPeerOpenLocks", "next we withdraw open locks");
+        
+        assert.equals(blockchainQueue.length, 2, "only a single lock proof is needed");
+        //Assert the withdraw proof
+        console.log(blockchainQueue[1]);
+        
+        //arguments: channelAddress, encodedLock, merkleProof,secret, 
+        var proofArgs= blockchainQueue[1];
+        var encodedLock = proofArgs[1];
+        var secret =proofArgs[3];
+        var hashLock = proofArgs[1].slice(64,96); 
+        var proof = engine.channels[channelAddress.toString('hex')].peerState.proof;
+        assert.equals(util.sha3(secret).compare(hashLock),0);
+        assert.equals(merkletree.checkMerkleProof(proofArgs[2], proof.locksRoot, util.sha3(encodedLock)),true);
         assert.equals(engine.channels[channelAddress.toString('hex')].isOpen(), false);
+        assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
 
 
         });
@@ -962,29 +1029,24 @@ t.test('multiple unopened locks expire on engine handleBlock',function (assert) 
      sendQueue.push(message.SERIALIZE(msg));
     }
 
-    engine.blockchain = function (msg)  {
-
-      blockchainQueue.push(msg);
-    }
-    engine2.blockchain = function (msg)  {
-      blockchainQueue.push(msg);
-    }
-
-    engine.onNewChannel(channelAddress,
-     util.toBuffer(acct1),
-      new util.BN(0),
-      util.toBuffer(acct4),
-      new util.BN(0));
-    engine2.onNewChannel(channelAddress,
-      util.toBuffer(acct1),
-      new util.BN(0),
-      util.toBuffer(acct4),
-      new util.BN(0))
+    var mockBlockChain = new MockBlockchain(blockchainQueue);
+    engine.blockchain = mockBlockChain;
+    engine2.blockchain = mockBlockChain;
+    
+    engine.onChannelNew(channelAddress,
+      pk_addr[0].address,
+      pk_addr[1].address,
+      channel.SETTLE_TIMEOUT);
+    engine2.onChannelNew(channelAddress,
+      pk_addr[0].address,
+      pk_addr[1].address,
+      channel.SETTLE_TIMEOUT)
 
 
+    engine.onChannelNewBalance(channelAddress,util.toBuffer(acct1), new util.BN(27));
+    engine2.onChannelNewBalance(channelAddress,util.toBuffer(acct1), new util.BN(27));
 
-    engine.onDeposited(channelAddress,util.toBuffer(acct1), new util.BN(27));
-    engine2.onDeposited(channelAddress,util.toBuffer(acct1), new util.BN(27));
+
 
     //END SETUP
 
@@ -1154,6 +1216,178 @@ t.test('multiple unopened locks expire on engine handleBlock',function (assert) 
 
   })
 
+t.test('should fail and revert channel state to open when close channel errors out',function (assert) {
+   var sendQueue = [];
+    var blockchainQueue = [];
+    var currentBlock = new util.BN(0);
+
+
+    var engine = createEngine(0);
+    var engine2 = createEngine(1);
+
+    
+
+    //SETUP AND DEPOSIT FOR ENGINES
+     engine.send = function  (msg) {
+      sendQueue.push(message.SERIALIZE(msg));
+    }
+
+    engine2.send = function  (msg) {
+      sendQueue.push(message.SERIALIZE(msg));
+    }
+
+    var mockBlockChain = new MockBlockchain(blockchainQueue);
+
+    engine.blockchain = mockBlockChain;
+    engine2.blockchain = mockBlockChain;
+    
+    engine.onChannelNew(channelAddress,
+      pk_addr[0].address,
+      pk_addr[1].address,
+      channel.SETTLE_TIMEOUT);
+    engine2.onChannelNew(channelAddress,
+      pk_addr[0].address,
+      pk_addr[1].address,
+      channel.SETTLE_TIMEOUT)
+
+
+    engine.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[0].address, new util.BN(501));
+    engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+    engine2.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+   
+
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+    assert.equals(engine.channelByPeer.hasOwnProperty(pk_addr[1].address.toString('hex')),true);
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    //END SETUP
+
+
+    currentBlock = currentBlock.add(new util.BN(1));
+
+    //START  A DIRECT TRANSFER FROM ENGINE(0) to ENGINE(1)
+
+    assert.equals(sendQueue.length, 0, "send direct transfer");
+
+    //to,target,amount,expiration,secret,hashLock
+    var secretHashPair = message.GenerateRandomSecretHashPair();
+
+   engine.sendMediatedTransfer(
+      pk_addr[1].address,
+      pk_addr[1].address,
+      new util.BN(50),
+      currentBlock.add(new util.BN(channel.REVEAL_TIMEOUT)).add(new util.BN(1)),
+      secretHashPair.secret,
+      secretHashPair.hash,
+      );
+
+    assert.equals(sendQueue.length, 1, "medited transfer in send queue");
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(50),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+    //console.log(mt.to.toString('hex') +":"+ pk_addr[1].address.toString('hex'));
+    var mediatedTransfer = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+
+    engine2.onMessage(mediatedTransfer);
+    assert.equals(sendQueue.length, 2, "requestSecret in send queu");
+    //console.log(engine.channelByPeer[pk_addr[1].address.toString('hex')]);
+
+    assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(50),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(50),new util.BN(0),currentBlock);
+
+
+    var requestSecret = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length - 1]);
+    engine.onMessage(requestSecret);
+    assert.equals(sendQueue.length, 3, "reveal secret in send queue from initiator -> target");
+    var revealSecretInitiator = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+    assert.equals(revealSecretInitiator.from.compare(pk_addr[0].address),0, "reveal secret signed by initiator");
+
+    engine2.onMessage(revealSecretInitiator);
+
+    assert.equals(sendQueue.length, 4, "reveal secret in send queue from target -> initiator");
+    var revealSecretTarget = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+    assert.equals(revealSecretTarget.from.compare(pk_addr[1].address),0, "reveal secret signed by initiator");
+    console.log(revealSecretTarget);
+    engine.onMessage(revealSecretTarget);
+
+    console.log(engine.channels[channelAddress.toString('hex')].myState);
+    console.log(engine2.channels[channelAddress.toString('hex')].peerState);
+
+     assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(1),new util.BN(501),new util.BN(0),new util.BN(0),new util.BN(50),currentBlock);
+
+     assert.equals(sendQueue.length, 5, "reveal secret in send queue from target -> initiator");
+      var secretToProof = message.DESERIALIZE_AND_DECODE_MESSAGE(sendQueue[sendQueue.length -1]);
+     assert.equals(secretToProof instanceof message.SecretToProof,true, "secretToProof generated by initiator");
+     engine2.onMessage(secretToProof);
+
+
+     //final states synchronized
+      assertChannelState(assert,
+      engine,channelAddress,
+      new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),currentBlock);
+
+    assertChannelState(assert,
+    engine2,channelAddress,
+      new util.BN(0),new util.BN(327),new util.BN(0),new util.BN(0),new util.BN(0),
+      new util.BN(2),new util.BN(501),new util.BN(50),new util.BN(0),new util.BN(0),currentBlock);
+
+    //MAIN PART OF TEST
+
+
+    assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
+     assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
+     mockBlockChain.closeChannel = function(channelAddress,proof,success,error){
+      assert.equals(engine2.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_IS_CLOSING);
+      this.cmdQueue.push("closeChannel");
+      var self = this;
+      var args = arguments;
+      return new Promise(function(resolve,reject) {
+            self.blockchainQueue.push(args);
+            setTimeout(function(){
+              reject(channelAddress);
+            },1000)
+              
+      });
+    }
+
+    //REVERT 
+    engine2.closeChannel(channelAddress).then(function(){
+      assert.equals(engine.channels[channelAddress.toString('hex')].state, channel.CHANNEL_STATE_OPEN);
+    });
+
+    assert.end();
+
+  });
+
   // t.test('lock expires on engine handleBlock',function (assert) {
   //   var blockchainQueue = [];
   //   var currentBlock = new util.BN(0);
@@ -1168,12 +1402,12 @@ t.test('multiple unopened locks expire on engine handleBlock',function (assert) 
   //     blockchainQueue.push(msg);
   //   }
 
-  //   engine.onNewChannel(channelAddress,
+  //   engine.onChannelNew(channelAddress,
   //     pk_addr[0].address,
   //     new util.BN(501),
   //     pk_addr[1].address,
   //     new util.BN(0));
-  //   engine2.onNewChannel(channelAddress,
+  //   engine2.onChannelNew(channelAddress,
   //     pk_addr[0].address,
   //     new util.BN(501),
   //     pk_addr[1].address,
@@ -1181,8 +1415,8 @@ t.test('multiple unopened locks expire on engine handleBlock',function (assert) 
 
 
 
-  //   engine.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
-  //   engine2.onDeposited(channelAddress,pk_addr[1].address, new util.BN(327));
+  //   engine.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
+  //   engine2.onChannelNewBalance(channelAddress,pk_addr[1].address, new util.BN(327));
 
 
   //   assertChannelState(assert,
