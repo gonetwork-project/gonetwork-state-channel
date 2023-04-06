@@ -1,7 +1,7 @@
 GoNetwork State Channel Engine
 ==============
 
-GoNetwork Documentations [WIP] : https://gonetwork.co/docs
+GoNetwork Documentations [WIP] : https://gonetltd.com/docs
 
 
 Quick Start
